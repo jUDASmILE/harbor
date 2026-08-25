@@ -16,6 +16,7 @@ package mgt
 
 import (
 	"context"
+	"crypto/fips140"
 	"fmt"
 	"strconv"
 	"strings"
@@ -105,11 +106,15 @@ type basicManager struct {
 
 // NewManager news a basic manager
 func NewManager(ctx context.Context, ns string, pool *redis.Pool) Manager {
+	var client *work.Client
+	fips140.WithoutEnforcement(func() {
+		client = work.NewClient(ns, pool)
+	})
 	return &basicManager{
 		ctx:       ctx,
 		namespace: ns,
 		pool:      pool,
-		client:    work.NewClient(ns, pool),
+		client:    client,
 	}
 }
 
@@ -261,7 +266,14 @@ func (bm *basicManager) GetScheduledJobs(q *query.Parameter) ([]*job.Stats, int6
 		page = q.PageNumber
 	}
 
-	sJobs, total, err := bm.client.ScheduledJobs(page)
+	var (
+		sJobs []*work.ScheduledJob
+		total int64
+		err   error
+	)
+	fips140.WithoutEnforcement(func() {
+		sJobs, total, err = bm.client.ScheduledJobs(page)
+	})
 	if err != nil {
 		return nil, 0, err
 	}

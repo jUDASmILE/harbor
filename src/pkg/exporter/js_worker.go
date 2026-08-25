@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"crypto/fips140"
 	"fmt"
 	"time"
 
@@ -58,7 +59,9 @@ func InitBackendWorker(redisPoolConfig *RedisPoolConfig) {
 	redisPool = pool
 	jsNamespace = fmt.Sprintf("{%s}", redisPoolConfig.Namespace)
 	// Start the backend worker
-	jsClient = work.NewClient(jsNamespace, pool)
+	fips140.WithoutEnforcement(func() {
+		jsClient = work.NewClient(jsNamespace, pool)
+	})
 }
 
 // GetBackendWorker ...

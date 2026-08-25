@@ -16,6 +16,9 @@ package jobmonitor
 
 import (
 	"context"
+	"crypto/fips140"
+
+	"github.com/gocraft/work"
 )
 
 // QueueManager defines the operation related to job service queue
@@ -32,7 +35,11 @@ func NewQueueClient() QueueManager {
 
 func (w *queueManagerImpl) List(_ context.Context, monitClient JobServiceMonitorClient) ([]*Queue, error) {
 	resultQueues := make([]*Queue, 0)
-	queues, err := monitClient.Queues()
+	var queues []*work.Queue
+	var err error
+	fips140.WithoutEnforcement(func() {
+		queues, err = monitClient.Queues()
+	})
 	if err != nil {
 		return nil, err
 	}
