@@ -16,6 +16,7 @@ package jobmonitor
 
 import (
 	"context"
+	"crypto/fips140"
 
 	"github.com/gocraft/work"
 )
@@ -47,7 +48,11 @@ func NewPoolManager() PoolManager {
 
 func (p poolManager) List(_ context.Context, monitorClient JobServiceMonitorClient) ([]*WorkerPool, error) {
 	workerPool := make([]*WorkerPool, 0)
-	wh, err := monitorClient.WorkerPoolHeartbeats()
+	var wh []*work.WorkerPoolHeartbeat
+	var err error
+	fips140.WithoutEnforcement(func() {
+		wh, err = monitorClient.WorkerPoolHeartbeats()
+	})
 	if err != nil {
 		return workerPool, err
 	}

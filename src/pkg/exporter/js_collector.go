@@ -15,6 +15,9 @@
 package exporter
 
 import (
+	"crypto/fips140"
+
+	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -93,7 +96,13 @@ func (hc *JobServiceCollector) getJobserviceInfo() []prometheus.Metric {
 	// get info via jobservice client
 	cli := GetBackendWorker()
 	// get queue info
-	qs, err := cli.Queues()
+	var (
+		qs  []*work.Queue
+		err error
+	)
+	fips140.WithoutEnforcement(func() {
+		qs, err = cli.Queues()
+	})
 	checkErr(err, "error when get work task queues info")
 	for _, q := range qs {
 		result = append(result, jobServiceTaskQueueSize.MustNewConstMetric(float64(q.Count), q.JobName))
@@ -101,7 +110,10 @@ func (hc *JobServiceCollector) getJobserviceInfo() []prometheus.Metric {
 	}
 
 	// get scheduled job info
-	_, total, err := cli.ScheduledJobs(0)
+	var total int64
+	fips140.WithoutEnforcement(func() {
+		_, total, err = cli.ScheduledJobs(0)
+	})
 	checkErr(err, "error when get scheduled job number")
 	result = append(result, jobServiceScheduledJobTotal.MustNewConstMetric(float64(total)))
 
