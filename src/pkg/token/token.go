@@ -91,7 +91,7 @@ func Parse(opt *Options, rawToken string, claims jwt.Claims) (*Token, error) {
 	}
 
 	if !token.Valid {
-		log.Errorf("invalid jwt token, %v", token)
+		log.Errorf("invalid jwt token")
 		return nil, errors.New("invalid jwt token")
 	}
 	return &Token{
