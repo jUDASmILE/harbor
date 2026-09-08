@@ -15,6 +15,7 @@
 package rds
 
 import (
+	"crypto/fips140"
 	"fmt"
 
 	"github.com/gomodule/redigo/redis"
@@ -105,7 +106,7 @@ return st
 `, luaFuncStCodeText)
 
 // SetStatusScript is lua script for setting job status atomically
-var SetStatusScript = redis.NewScript(2, setStatusScriptText)
+var SetStatusScript *redis.Script
 
 // Used to set the hook ACK
 //
@@ -169,7 +170,7 @@ return 'ok'
 `, luaFuncStCodeText, luaFuncCompareText)
 
 // HookAckScript is defined to set the hook event ACK in the job stats map
-var HookAckScript = redis.NewScript(2, hookAckScriptText)
+var HookAckScript *redis.Script
 
 // Used to reset job status
 //
@@ -190,7 +191,15 @@ redis.call('hset', KEYS[2], ARGV[1], 2)
 `
 
 // StatusResetScript is lua script to reset the job stats
-var StatusResetScript = redis.NewScript(2, statusResetScriptText)
+var StatusResetScript *redis.Script
+
+func init() {
+	fips140.WithoutEnforcement(func() {
+		SetStatusScript = redis.NewScript(2, setStatusScriptText)
+		HookAckScript = redis.NewScript(2, hookAckScriptText)
+		StatusResetScript = redis.NewScript(2, statusResetScriptText)
+	})
+}
 
 // Copy from upstream worker framework
 // Used by the reaper to re-enqueue jobs that were in progress
@@ -228,5 +237,9 @@ return nil`, requeueKeysPerJob)
 
 // RedisLuaReenqueueScript returns redis script of redisLuaReenqueueJob
 func RedisLuaReenqueueScript(jobTypesCount int) *redis.Script {
-	return redis.NewScript(jobTypesCount*requeueKeysPerJob, redisLuaReenqueueJob)
+	var script *redis.Script
+	fips140.WithoutEnforcement(func() {
+		script = redis.NewScript(jobTypesCount*requeueKeysPerJob, redisLuaReenqueueJob)
+	})
+	return script
 }

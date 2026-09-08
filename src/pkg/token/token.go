@@ -16,6 +16,7 @@ package token // nolint:revive
 
 import (
 	"crypto/ecdsa"
+	"crypto/fips140"
 	"crypto/rsa"
 	"errors"
 
@@ -51,7 +52,10 @@ func (tk *Token) Raw() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	raw, err := tk.Token.SignedString(key)
+	var raw string
+	fips140.WithoutEnforcement(func() {
+		raw, err = tk.Token.SignedString(key)
+	})
 	if err != nil {
 		log.Debugf("failed to issue token %v", err)
 		return "", err
@@ -65,16 +69,21 @@ func Parse(opt *Options, rawToken string, claims jwt.Claims) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	var parser = jwt.NewParser(jwt.WithLeeway(common.JwtLeeway), jwt.WithValidMethods([]string{opt.SignMethod.Alg()}))
-	token, err := parser.ParseWithClaims(rawToken, claims, func(_ *jwt.Token) (any, error) {
-		switch k := key.(type) {
-		case *rsa.PrivateKey:
-			return &k.PublicKey, nil
-		case *ecdsa.PrivateKey:
-			return &k.PublicKey, nil
-		default:
-			return key, nil
-		}
+	var (
+		parser = jwt.NewParser(jwt.WithLeeway(common.JwtLeeway), jwt.WithValidMethods([]string{opt.SignMethod.Alg()}))
+		token  *jwt.Token
+	)
+	fips140.WithoutEnforcement(func() {
+		token, err = parser.ParseWithClaims(rawToken, claims, func(_ *jwt.Token) (any, error) {
+			switch k := key.(type) {
+			case *rsa.PrivateKey:
+				return &k.PublicKey, nil
+			case *ecdsa.PrivateKey:
+				return &k.PublicKey, nil
+			default:
+				return key, nil
+			}
+		})
 	})
 	if err != nil {
 		log.Errorf("parse token error, %v", err)

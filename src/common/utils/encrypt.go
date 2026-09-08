@@ -17,6 +17,7 @@ package utils
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/fips140"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha1" // nolint:gosec // G505: blocklisted import kept for legacy PBKDF2-SHA1 password verification only
@@ -61,7 +62,13 @@ const (
 // PBKDF2-HMAC-SHA256 with a high iteration count instead (see
 // pkg/user/manager.go). Please don't use SHA1 to hash any new secrets.
 var HashAlg = map[string]func() hash.Hash{
-	SHA1:         sha1.New, // nolint:gosec // G401/G505: weak hash kept only for legacy PBKDF2 password verification
+	SHA1: func() hash.Hash {
+		var h hash.Hash
+		fips140.WithoutEnforcement(func() {
+			h = sha1.New()
+		})
+		return h
+	}, // nolint:gosec // G401/G505: weak hash kept only for legacy PBKDF2 password verification
 	SHA256:       sha256.New,
 	PBKDF2SHA256: sha256.New,
 }
@@ -88,7 +95,10 @@ func pbkdf2Params(version string) (func() hash.Hash, int) {
 // Encrypt encrypts the content with salt
 func Encrypt(content string, salt string, encryptAlg string) string {
 	alg, iterations := pbkdf2Params(encryptAlg)
-	key, _ := pbkdf2.Key(alg, content, []byte(salt), iterations, 16)
+	var key []byte
+	fips140.WithoutEnforcement(func() {
+		key, _ = pbkdf2.Key(alg, content, []byte(salt), iterations, 16)
+	})
 	return fmt.Sprintf("%x", key)
 }
 
@@ -114,7 +124,10 @@ func ReversibleEncrypt(str, key string) (string, error) {
 		return "", err
 	}
 
-	cfb := cipher.NewCFBEncrypter(block, iv)
+	var cfb cipher.Stream
+	fips140.WithoutEnforcement(func() {
+		cfb = cipher.NewCFBEncrypter(block, iv)
+	})
 	cfb.XORKeyStream(cipherText[aes.BlockSize:], []byte(str))
 	encrypted := EncryptHeaderV1 + base64.StdEncoding.EncodeToString(cipherText)
 	return encrypted, nil
@@ -154,7 +167,10 @@ func decryptAES(str, key string) (string, error) {
 
 	iv := cipherText[:aes.BlockSize]
 	cipherText = cipherText[aes.BlockSize:]
-	cfb := cipher.NewCFBDecrypter(block, iv)
+	var cfb cipher.Stream
+	fips140.WithoutEnforcement(func() {
+		cfb = cipher.NewCFBDecrypter(block, iv)
+	})
 	cfb.XORKeyStream(cipherText, cipherText)
 	return string(cipherText), nil
 }

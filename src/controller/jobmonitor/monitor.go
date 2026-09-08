@@ -16,6 +16,7 @@ package jobmonitor
 
 import (
 	"context"
+	"crypto/fips140"
 	"fmt"
 	"slices"
 	"strings"
@@ -113,7 +114,11 @@ func jobServiceMonitorClient() (jm.JobServiceMonitorClient, error) {
 		log.Errorf("failed to get redis pool: %v", err)
 		return nil, err
 	}
-	return work.NewClient(fmt.Sprintf("{%s}", config.Namespace), pool), nil
+	var client *work.Client
+	fips140.WithoutEnforcement(func() {
+		client = work.NewClient(fmt.Sprintf("{%s}", config.Namespace), pool)
+	})
+	return client, nil
 }
 
 func (w *monitorController) ListWorkers(ctx context.Context, poolID string) ([]*jm.Worker, error) {
@@ -254,7 +259,10 @@ func (w *monitorController) ListQueues(ctx context.Context) ([]*jm.Queue, error)
 	if err != nil {
 		return nil, err
 	}
-	qs, err := mClient.Queues()
+	var qs []*work.Queue
+	fips140.WithoutEnforcement(func() {
+		qs, err = mClient.Queues()
+	})
 	if err != nil {
 		return nil, err
 	}

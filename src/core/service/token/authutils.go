@@ -16,6 +16,7 @@ package token // nolint:revive
 
 import (
 	"context"
+	"crypto/fips140"
 	"fmt"
 	"strings"
 	"time"
@@ -139,7 +140,12 @@ func MakeToken(ctx context.Context, username, service string, access []*token.Re
 	}
 	// Add kid to token header for compatibility with docker distribution's code
 	// see https://github.com/docker/distribution/blob/release/2.7/registry/auth/token/token.go#L197
-	k, err := libtrust.UnmarshalPrivateKeyPEM(options.PrivateKey)
+	var (
+		k   libtrust.PrivateKey
+	)
+	fips140.WithoutEnforcement(func() {
+		k, err = libtrust.UnmarshalPrivateKeyPEM(options.PrivateKey)
+	})
 	if err != nil {
 		return nil, err
 	}

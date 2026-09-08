@@ -15,6 +15,7 @@
 package cworker
 
 import (
+	"crypto/fips140"
 	"fmt"
 	"reflect"
 	"sync"
@@ -86,12 +87,21 @@ func NewWorker(ctx *env.Context, namespace string, workerCount uint, redisPool *
 		wc = workerCount
 	}
 
+	var pool *work.WorkerPool
+	var enqueuer *work.Enqueuer
+	var client *work.Client
+	fips140.WithoutEnforcement(func() {
+		pool = work.NewWorkerPool(workerContext{}, wc, namespace, redisPool)
+		enqueuer = work.NewEnqueuer(namespace, redisPool)
+		client = work.NewClient(namespace, redisPool)
+	})
+
 	return &basicWorker{
 		namespace: namespace,
 		redisPool: redisPool,
-		pool:      work.NewWorkerPool(workerContext{}, wc, namespace, redisPool),
-		enqueuer:  work.NewEnqueuer(namespace, redisPool),
-		client:    work.NewClient(namespace, redisPool),
+		pool:      pool,
+		enqueuer:  enqueuer,
+		client:    client,
 		scheduler: period.NewScheduler(ctx.SystemContext, namespace, redisPool, ctl),
 		ctl:       ctl,
 		context:   ctx,
@@ -136,9 +146,11 @@ func (w *basicWorker) Start() error {
 
 	// Start the backend worker pool
 	// Add middleware
-	w.pool.Middleware((*workerContext).logJob)
-	// Non blocking call
-	w.pool.Start()
+	fips140.WithoutEnforcement(func() {
+		w.pool.Middleware((*workerContext).logJob)
+		// Non blocking call
+		w.pool.Start()
+	})
 	logger.Infof("Basic worker is started")
 
 	// Listen to the system signal
@@ -199,15 +211,16 @@ func (w *basicWorker) Enqueue(jobName string, params job.Parameters, isUnique bo
 	// check the uniqueness of the job,
 	// Here we only need to make sure only 1 job with the same type and parameters in the queue
 	// For the uniqueness of executing, it can be checked in the running stage
-	if isUnique {
-		if j, err = w.enqueuer.EnqueueUnique(jobName, params); err != nil {
-			return nil, err
+	fips140.WithoutEnforcement(func() {
+		if isUnique {
+			j, err = w.enqueuer.EnqueueUnique(jobName, params)
+		} else {
+			// Enqueue job
+			j, err = w.enqueuer.Enqueue(jobName, params)
 		}
-	} else {
-		// Enqueue job
-		if j, err = w.enqueuer.Enqueue(jobName, params); err != nil {
-			return nil, err
-		}
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// avoid backend worker bug
@@ -229,15 +242,16 @@ func (w *basicWorker) Schedule(jobName string, params job.Parameters, runAfterSe
 	// check the uniqueness of the job,
 	// Here we only need to make sure only 1 job with the same type and parameters in the queue
 	// For the uniqueness of executing, it can be checked in the running stage
-	if isUnique {
-		if j, err = w.enqueuer.EnqueueUniqueIn(jobName, int64(runAfterSeconds), params); err != nil {
-			return nil, err
+	fips140.WithoutEnforcement(func() {
+		if isUnique {
+			j, err = w.enqueuer.EnqueueUniqueIn(jobName, int64(runAfterSeconds), params)
+		} else {
+			// Enqueue job in
+			j, err = w.enqueuer.EnqueueIn(jobName, int64(runAfterSeconds), params)
 		}
-	} else {
-		// Enqueue job in
-		if j, err = w.enqueuer.EnqueueIn(jobName, int64(runAfterSeconds), params); err != nil {
-			return nil, err
-		}
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// avoid backend worker bug
@@ -289,7 +303,13 @@ func (w *basicWorker) PeriodicallyEnqueue(jobName string, params job.Parameters,
 // Info of worker
 func (w *basicWorker) Stats() (*worker.Stats, error) {
 	// Get the status of worker pool via client
-	hbs, err := w.client.WorkerPoolHeartbeats()
+	var (
+		hbs []*work.WorkerPoolHeartbeat
+		err error
+	)
+	fips140.WithoutEnforcement(func() {
+		hbs, err = w.client.WorkerPoolHeartbeats()
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +381,10 @@ func (w *basicWorker) StopJob(jobID string) error {
 	// Do more for scheduled job kind
 	if t.Job().Info.JobKind == job.KindScheduled {
 		// We need to delete the scheduled job in the queue if it is not running yet
-		if err := w.client.DeleteScheduledJob(t.Job().Info.RunAt, jobID); err != nil {
+		fips140.WithoutEnforcement(func() {
+			err = w.client.DeleteScheduledJob(t.Job().Info.RunAt, jobID)
+		})
+		if err != nil {
 			// Job is already running?
 			logger.Warningf("scheduled job %s (run at = %d) is not found in the queue, is it running?", lib.TrimLineBreaks(jobID), t.Job().Info.RunAt)
 		}
@@ -428,19 +451,21 @@ func (w *basicWorker) registerJob(name string, j any) (err error) {
 	// Get more info from j
 	theJ := runner.Wrap(j)
 	// Put into the pool
-	w.pool.JobWithOptions(
-		name,
-		work.JobOptions{
-			MaxFails:       theJ.MaxFails(),
-			MaxConcurrency: theJ.MaxCurrency(),
-			Priority:       job.Priority().For(name),
-			SkipDead:       true,
-		},
-		// Use generic handler to handle as we do not accept context with this way.
-		func(job *work.Job) error {
-			return redisJob.Run(job)
-		},
-	)
+	fips140.WithoutEnforcement(func() {
+		w.pool.JobWithOptions(
+			name,
+			work.JobOptions{
+				MaxFails:       theJ.MaxFails(),
+				MaxConcurrency: theJ.MaxCurrency(),
+				Priority:       job.Priority().For(name),
+				SkipDead:       true,
+			},
+			// Use generic handler to handle as we do not accept context with this way.
+			func(job *work.Job) error {
+				return redisJob.Run(job)
+			},
+		)
+	})
 	// Keep the name of registered jobs as known jobs for future validation
 	w.knownJobs.Store(name, j)
 
