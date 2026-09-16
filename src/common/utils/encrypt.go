@@ -17,6 +17,7 @@ package utils
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/fips140"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha1" // nolint:gosec // G505: blocklisted import kept for legacy PBKDF2-SHA1 password verification only
@@ -88,7 +89,14 @@ func pbkdf2Params(version string) (func() hash.Hash, int) {
 // Encrypt encrypts the content with salt
 func Encrypt(content string, salt string, encryptAlg string) string {
 	alg, iterations := pbkdf2Params(encryptAlg)
-	key, _ := pbkdf2.Key(alg, content, []byte(salt), iterations, 16)
+	var key []byte
+	if encryptAlg == SHA1 {
+		fips140.WithoutEnforcement(func() {
+			key, _ = pbkdf2.Key(alg, content, []byte(salt), iterations, 16)
+		})
+	} else {
+		key, _ = pbkdf2.Key(alg, content, []byte(salt), iterations, 16)
+	}
 	return fmt.Sprintf("%x", key)
 }
 
@@ -114,7 +122,10 @@ func ReversibleEncrypt(str, key string) (string, error) {
 		return "", err
 	}
 
-	cfb := cipher.NewCFBEncrypter(block, iv)
+	var cfb cipher.Stream
+	fips140.WithoutEnforcement(func() {
+		cfb = cipher.NewCFBEncrypter(block, iv)
+	})
 	cfb.XORKeyStream(cipherText[aes.BlockSize:], []byte(str))
 	encrypted := EncryptHeaderV1 + base64.StdEncoding.EncodeToString(cipherText)
 	return encrypted, nil
@@ -154,7 +165,10 @@ func decryptAES(str, key string) (string, error) {
 
 	iv := cipherText[:aes.BlockSize]
 	cipherText = cipherText[aes.BlockSize:]
-	cfb := cipher.NewCFBDecrypter(block, iv)
+	var cfb cipher.Stream
+	fips140.WithoutEnforcement(func() {
+		cfb = cipher.NewCFBDecrypter(block, iv)
+	})
 	cfb.XORKeyStream(cipherText, cipherText)
 	return string(cipherText), nil
 }

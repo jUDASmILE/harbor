@@ -15,6 +15,7 @@
 package config
 
 import (
+	"crypto/fips140"
 	"fmt"
 	"os"
 
@@ -78,7 +79,12 @@ func (c *Configuration) setStorageDriver() error {
 	if err != nil {
 		return fmt.Errorf("error parsing registry configuration %s: %v", c.RegistryConfig, err)
 	}
-	storageDriver, err := factory.Create(rConf.Storage.Type(), rConf.Storage.Parameters())
+	var (
+		storageDriver storagedriver.StorageDriver
+	)
+	fips140.WithoutEnforcement(func() {
+		storageDriver, err = factory.Create(rConf.Storage.Type(), rConf.Storage.Parameters())
+	})
 	if err != nil {
 		return err
 	}
