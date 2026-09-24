@@ -16,6 +16,7 @@ package period
 
 import (
 	"context"
+	"crypto/fips140"
 	"math/rand"
 	"time"
 
@@ -139,7 +140,10 @@ func (bs *basicScheduler) UnSchedule(policyID string) error {
 			if job.ScheduledStatus == job.Status(e.Info.Status) {
 				// Please pay attention here, the job ID used in the scheduled job queue is
 				// the ID of the periodic job (policy).
-				if err := bs.client.DeleteScheduledJob(e.Info.RunAt, policyID); err != nil {
+				fips140.WithoutEnforcement(func() {
+					err = bs.client.DeleteScheduledJob(e.Info.RunAt, policyID)
+				})
+				if err != nil {
 					logger.Errorf("Delete scheduled job %s error: %s", eID, err)
 				}
 			}
@@ -231,7 +235,10 @@ func (bs *basicScheduler) clearDirtyJobs() {
 			continue
 		}
 
-		if err = bs.client.DeleteScheduledJob(jobScore.Score, j.ID); err != nil {
+		fips140.WithoutEnforcement(func() {
+			err = bs.client.DeleteScheduledJob(jobScore.Score, j.ID)
+		})
+		if err != nil {
 			logger.Errorf("Remove dirty scheduled job error: %s", err)
 		} else {
 			logger.Debugf("Remove dirty scheduled job: %s run at %#v", j.ID, time.Unix(jobScore.Score, 0).String())

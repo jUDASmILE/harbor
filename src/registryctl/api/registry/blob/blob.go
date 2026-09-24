@@ -15,6 +15,7 @@
 package blob
 
 import (
+	"crypto/fips140"
 	"errors"
 	"net/http"
 
@@ -65,7 +66,11 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	// don't parse the reference here as RemoveBlob does.
 	cleaner := storage.NewVacuum(ctx, h.storageDriver)
-	if err := cleaner.RemoveBlob(ref); err != nil {
+	var err error
+	fips140.WithoutEnforcement(func() {
+		err = cleaner.RemoveBlob(ref)
+	})
+	if err != nil {
 		tracelib.RecordError(span, err, "failed to remove blob")
 		log.Infof("failed to remove blob: %s, with error:%v", ref, err)
 		api.HandleError(w, err)

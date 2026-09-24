@@ -15,6 +15,7 @@
 package manifest
 
 import (
+	"crypto/fips140"
 	"net/http"
 
 	"github.com/docker/distribution/registry/storage"
@@ -84,7 +85,10 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	// let the tags as empty here, as it non-blocking GC. The tags deletion will be handled via DELETE /v2/manifest
 	var tags []string
 	cleaner := storage.NewVacuum(ctx, h.storageDriver)
-	if err := cleaner.RemoveManifest(repoName, dgst, tags); err != nil {
+	fips140.WithoutEnforcement(func() {
+		err = cleaner.RemoveManifest(repoName, dgst, tags)
+	})
+	if err != nil {
 		tracelib.RecordError(span, err, "failed to remove manifest")
 		log.Infof("failed to remove manifest: %s, with error:%v", ref, err)
 		api.HandleError(w, err)

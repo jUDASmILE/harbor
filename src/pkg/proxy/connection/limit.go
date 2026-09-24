@@ -16,6 +16,7 @@ package connection
 
 import (
 	"context"
+	"crypto/fips140"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
@@ -47,7 +48,7 @@ else
 end
 `
 
-var acquireScript = redis.NewScript(increaseWithLimitText)
+var acquireScript *redis.Script
 
 // Acquire tries to acquire a connection, returns true if successful
 func (c *ConnLimiter) Acquire(ctx context.Context, rdb *redis.Client, key string, limit int) bool {
@@ -68,7 +69,14 @@ end
 return 0
 `
 
-var decreaseScript = redis.NewScript(decreaseText)
+var decreaseScript *redis.Script
+
+func init() {
+	fips140.WithoutEnforcement(func() {
+		acquireScript = redis.NewScript(increaseWithLimitText)
+		decreaseScript = redis.NewScript(decreaseText)
+	})
+}
 
 // Release releases a connection in redis
 func (c *ConnLimiter) Release(ctx context.Context, rdb *redis.Client, key string) {
