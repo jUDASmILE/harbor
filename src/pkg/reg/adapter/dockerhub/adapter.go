@@ -261,7 +261,11 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 		return nil, err
 	}
 
-	namespaces, err := a.listCandidateNamespaces(nameFilter)
+	nameMatcher, err := util.Compile(nameFilter, util.FilterKind(filters, model.FilterTypeName))
+	if err != nil {
+		return nil, err
+	}
+	namespaces, err := a.listCandidateNamespaces(util.ListingPattern(nameFilter, util.FilterKind(filters, model.FilterTypeName)))
 	if err != nil {
 		return nil, err
 	}
@@ -298,11 +302,7 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 
 			// If name filter set, skip repos that don't match the filter pattern.
 			if len(nameFilter) != 0 {
-				m, err := util.Match(nameFilter, name)
-				if err != nil {
-					return fmt.Errorf("match repo name '%s' against pattern '%s' error: %v", name, nameFilter, err)
-				}
-				if !m {
+				if !nameMatcher.MatchString(name) {
 					return nil
 				}
 			}

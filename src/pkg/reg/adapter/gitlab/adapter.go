@@ -111,7 +111,25 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 		}
 	}
 
-	projects, err = a.getProjectsByPattern(nameFilter)
+	nameMatcher, err := util.Compile(nameFilter, util.FilterKind(filters, model.FilterTypeName))
+	if err != nil {
+		return nil, err
+	}
+	tagExpression := tagFilter
+	if util.FilterKind(filters, model.FilterTypeTag) != "regex" {
+		tagExpression = strings.ToLower(tagExpression)
+	}
+	tagMatcher, err := util.Compile(tagExpression, util.FilterKind(filters, model.FilterTypeTag))
+	if err != nil {
+		return nil, err
+	}
+	discoveryPattern := nameFilter
+	if util.FilterKind(filters, model.FilterTypeName) == "regex" {
+		// GitLab project search is not a repository-prefix search. Enumerate projects
+		// before applying a regex to full repository paths.
+		discoveryPattern = ""
+	}
+	projects, err = a.getProjectsByPattern(discoveryPattern)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +141,7 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 	}
 	var pathPatterns []string
 
-	if paths, ok := util.IsSpecificPath(nameFilter); ok {
+	if paths, ok := util.SpecificPaths(nameFilter, util.FilterKind(filters, model.FilterTypeName)); ok {
 		pathPatterns = paths
 	} else {
 		pathPatterns = append(pathPatterns, nameFilter)
@@ -144,7 +162,13 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 			continue
 		}
 		for _, repository := range repositories {
-			if !existPatterns(repository.Path, pathPatterns) {
+			nameMatches := false
+			if util.FilterKind(filters, model.FilterTypeName) == "regex" {
+				nameMatches = nameMatcher.MatchString(repository.Path)
+			} else {
+				nameMatches = existPatterns(repository.Path, pathPatterns)
+			}
+			if !nameMatches {
 				log.Debugf("Skipping repository path=%s and id=%d", repository.Path, repository.ID)
 				continue
 			}
@@ -159,7 +183,19 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 			tags := []string{}
 			for _, vTag := range vTags {
 				if len(tagFilter) > 0 {
-					if ok, _ := util.Match(strings.ToLower(tagFilter), strings.ToLower(vTag.Name)); !ok {
+					value := vTag.Name
+					if util.FilterKind(filters, model.FilterTypeTag) != "regex" {
+						value = strings.ToLower(value)
+					}
+					matched := tagMatcher.MatchString(value)
+					exclude := false
+					for _, f := range filters {
+						if f.Type == model.FilterTypeTag {
+							exclude = f.Kind == "regex" && f.Decoration == model.Excludes
+							break
+						}
+					}
+					if matched == exclude {
 						continue
 					}
 				}

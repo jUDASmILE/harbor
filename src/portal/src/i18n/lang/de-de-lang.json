@@ -2016,5 +2016,12 @@
         "PUSH_PERMISSION_TOOLTIP": "Die Push-Berechtigung setzt die Pull-Berechtigung voraus.",
         "NOT_FOUND": "Es konnten keine Rollen gefunden werden!",
         "SEARCH_BY_NAME": "Rolle mittels Namen suchen"
+    },
+    "PATTERN": {
+        "ENGINE": "Muster-Engine",
+        "REGEX_HELP": "RE2-Abgleich der gesamten Zeichenfolge, z. B. v?\\d+\\.\\d+\\.\\d+. Maximal 512 Zeichen. Lookarounds und Rückverweise werden nicht unterstützt.",
+        "GLOB_HELP": "Glob-Abgleich, z. B. library/** oder release-*. Alternativen durch Kommas trennen.",
+        "REGEX_INVALID": "Der reguläre Ausdruck ist ungültig oder verwendet nicht unterstützte RE2-Syntax.",
+        "TOO_LONG": "Der reguläre Ausdruck darf 512 Zeichen nicht überschreiten."
     }
 }

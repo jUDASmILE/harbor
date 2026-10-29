@@ -7919,6 +7919,10 @@ definitions:
         description: 'The replication policy filter type.'
       value:
         description: 'The value of replication policy filter. For name, tag, and resource filters, this should be a string. For label filters, this should be an array of strings.'
+      kind:
+        type: string
+        x-isnullable: true # make this field optional to keep backward compatibility
+        description: 'Pattern engine: doublestar (default) or regex (Go RE2, full-string matching, maximum 512 characters).'
       decoration:
         type: string
         description: 'matches or excludes the result'

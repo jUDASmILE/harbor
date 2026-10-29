@@ -13,6 +13,7 @@ import (
 	"github.com/goharbor/harbor/src/lib/orm"
 	"github.com/goharbor/harbor/src/lib/q"
 	"github.com/goharbor/harbor/src/lib/selector"
+	immutablepkg "github.com/goharbor/harbor/src/pkg/immutable"
 	"github.com/goharbor/harbor/src/pkg/immutable/model"
 )
 
@@ -368,7 +369,7 @@ func (s *MatchTestSuite) TestImmuMatchMultiExcludeSelector() {
 func (s *MatchTestSuite) TestImmuMatchNilSelector() {
 	const pid = int64(5)
 	s.purgeRules(pid)
-	id, err := s.ctr.CreateImmutableRule(orm.Context(), &model.Metadata{
+	id, err := immutablepkg.Mgr.CreateImmutableRule(orm.Context(), &model.Metadata{
 		ProjectID: pid,
 		Priority:  1,
 		Action:    "immutable",

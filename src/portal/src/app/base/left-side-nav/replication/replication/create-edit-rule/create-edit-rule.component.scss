@@ -27,7 +27,7 @@ h4 {
 
 .filterSelect {
     position: relative;
-    width: 315px;
+    width: 100%;
     margin-bottom:0.25rem;
 }
 
@@ -370,4 +370,10 @@ clr-modal {
 
 :host ::ng-deep .clr-checkbox-wrapper {
     align-items: center;
+}
+
+
+.filterSelect > .flex {
+    flex-wrap: wrap;
+    align-items: flex-start;
 }

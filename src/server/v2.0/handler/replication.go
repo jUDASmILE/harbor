@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/strfmt"
+	"github.com/go-openapi/swag"
 
 	"github.com/goharbor/harbor/src/common/rbac"
 	"github.com/goharbor/harbor/src/controller/replication"
@@ -87,6 +88,7 @@ func (r *replicationAPI) CreateReplicationPolicy(ctx context.Context, params ope
 		for _, filter := range params.Policy.Filters {
 			policy.Filters = append(policy.Filters, &model.Filter{
 				Type:       filter.Type,
+				Kind:       swag.StringValue(filter.Kind),
 				Value:      filter.Value,
 				Decoration: filter.Decoration,
 			})
@@ -163,6 +165,7 @@ func (r *replicationAPI) UpdateReplicationPolicy(ctx context.Context, params ope
 		for _, filter := range params.Policy.Filters {
 			policy.Filters = append(policy.Filters, &model.Filter{
 				Type:       filter.Type,
+				Kind:       swag.StringValue(filter.Kind),
 				Value:      filter.Value,
 				Decoration: filter.Decoration,
 			})
@@ -474,6 +477,7 @@ func convertReplicationPolicy(policy *repctlmodel.Policy) *models.ReplicationPol
 		for _, filter := range policy.Filters {
 			p.Filters = append(p.Filters, &models.ReplicationFilter{
 				Type:       string(filter.Type),
+				Kind:       replicationFilterKind(filter.Kind),
 				Value:      filter.Value,
 				Decoration: filter.Decoration,
 			})
@@ -586,4 +590,12 @@ func convertTask(task *replication.Task) *models.ReplicationTask {
 		tk.Status = task.Status
 	}
 	return tk
+}
+
+// Keep absent kinds absent for existing API clients.
+func replicationFilterKind(kind string) *string {
+	if kind == "" {
+		return nil
+	}
+	return &kind
 }

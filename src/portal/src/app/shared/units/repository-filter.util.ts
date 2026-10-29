@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { validatePattern } from './pattern.util';
+
 export function validateRepositoryFilterPattern(
     kind: string,
     pattern: string
@@ -20,12 +22,10 @@ export function validateRepositoryFilterPattern(
     }
 
     if (kind === 'regex') {
-        try {
-            new RegExp(pattern);
-            return null;
-        } catch (e) {
-            return 'PROJECT.REPOSITORY_FILTER_REGEX_INVALID';
-        }
+        const error = validatePattern(pattern, kind);
+        return error === 'PATTERN.REGEX_INVALID'
+            ? 'PROJECT.REPOSITORY_FILTER_REGEX_INVALID'
+            : error;
     } else if (kind === 'doublestar') {
         if (!checkBalancedChars(pattern)) {
             return 'PROJECT.REPOSITORY_FILTER_DOUBLESTAR_INVALID';

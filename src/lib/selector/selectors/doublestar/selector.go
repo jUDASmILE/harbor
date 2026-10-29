@@ -19,6 +19,7 @@ import (
 
 	"github.com/bmatcuk/doublestar"
 
+	"github.com/goharbor/harbor/src/lib/pattern"
 	iselector "github.com/goharbor/harbor/src/lib/selector"
 )
 
@@ -166,4 +167,14 @@ func match(pattern, str string) (bool, error) {
 		return true, nil
 	}
 	return doublestar.Match(pattern, str)
+}
+
+// NewValidated constructs a selector, rejecting malformed patterns at load time.
+// New remains available for existing callers that already validate their input.
+func NewValidated(decoration string, value any, extras string) (iselector.Selector, error) {
+	p, _ := value.(string)
+	if err := pattern.Validate(p, Kind); err != nil {
+		return nil, err
+	}
+	return New(decoration, value, extras), nil
 }

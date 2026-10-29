@@ -1,0 +1,20 @@
+<span class="clr-select-wrapper">
+    <select
+        class="clr-select"
+        [ngModel]="kind || 'doublestar'"
+        [ngModelOptions]="{standalone: true}"
+        (ngModelChange)="kindChange.emit($event)"
+        [attr.aria-label]="'PATTERN.ENGINE' | translate"
+        [title]="(kind === 'regex' ? 'PATTERN.REGEX_HELP' : 'PATTERN.GLOB_HELP') | translate">
+        @for (engine of engines; track engine) {
+        <option [value]="engine">
+            {{ engine === 'regex' ? 'RegEx' : 'Doublestar' }}
+        </option>
+        }
+    </select>
+</span>
+@if (error) {
+<span class="clr-subtext" role="alert">{{ error | translate }}</span>
+} @if (kind === 'regex' && fieldError) {
+<span class="clr-subtext" role="alert">{{ fieldError }}</span>
+}

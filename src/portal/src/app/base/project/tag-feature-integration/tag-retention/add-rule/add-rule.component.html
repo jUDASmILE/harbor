@@ -12,7 +12,7 @@
         {{ 'TAG_RETENTION.EDIT_TITLE' | translate }}
     </h3>
     }
-    <div class="modal-body no-scrolling">
+    <div class="modal-body">
         <inline-alert class="modal-title"></inline-alert>
         <p class="color-97">{{ 'TAG_RETENTION.ADD_SUBTITLE' | translate }}</p>
         <div class="height-72">
@@ -27,8 +27,7 @@
                         <select
                             [(ngModel)]="repoSelect"
                             class="clr-select w-100">
-                            @for ( d of metadata?.scope_selectors[0]
-                            ?.decorations ; track d) {
+                            @for ( d of decorations(true) ; track d) {
                             <option value="{{ d }}">
                                 {{ getI18nKey(d) | translate }}
                             </option>
@@ -38,6 +37,11 @@
                 </div>
                 <div class="clr-col-6">
                     <div class="w-100">
+                        <hbr-pattern-engine
+                            [serverError]="inlineAlert?.errorMessage"
+                            [(kind)]="repoKind"
+                            [pattern]="repositories"
+                            [engines]="scopeEngines"></hbr-pattern-engine>
                         <input
                             id="repos"
                             required
@@ -50,7 +54,7 @@
                 <div class="clr-col-4"></div>
                 <div class="clr-col-8 margin-top-5px">
                     <span class="tootip">{{
-                        'TAG_RETENTION.REP_SEPARATOR' | translate
+                        (repoKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'TAG_RETENTION.REP_SEPARATOR') | translate
                     }}</span>
                 </div>
             </div>
@@ -72,6 +76,9 @@
                             @for (t of metadata?.templates; track t) {
                             <option value="{{ t?.rule_template }}">
                                 {{ getI18nKey(t?.action) | translate
+
+
+
                                 }}{{ getI18nKey(t?.display_text) | translate }}
                             </option>
                             }
@@ -105,8 +112,7 @@
                         <select
                             [(ngModel)]="tagsSelect"
                             class="clr-select w-100">
-                            @for ( d of metadata?.tag_selectors[0] ?.decorations
-                            ; track d) {
+                            @for ( d of decorations(false) ; track d) {
                             <option value="{{ d }}">
                                 {{ getI18nKey(d) | translate }}
                             </option>
@@ -116,6 +122,11 @@
                 </div>
                 <div class="clr-col-3">
                     <div class="w-100">
+                        <hbr-pattern-engine
+                            [serverError]="inlineAlert?.errorMessage"
+                            [(kind)]="tagsKind"
+                            [pattern]="tagsInput"
+                            [engines]="tagEngines"></hbr-pattern-engine>
                         <input
                             id="tags"
                             required
@@ -142,7 +153,7 @@
                 <div class="clr-col-4"></div>
                 <div class="clr-col-8 margin-top-5px">
                     <span class="tootip">{{
-                        'TAG_RETENTION.TAG_SEPARATOR' | translate
+                        (tagsKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'TAG_RETENTION.TAG_SEPARATOR') | translate
                     }}</span>
                 </div>
             </div>

@@ -15,6 +15,8 @@
 package pattern
 
 import (
+	"github.com/bmatcuk/doublestar"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -241,5 +243,62 @@ func TestMatch(t *testing.T) {
 				assert.Equal(t, tc.want, got)
 			}
 		})
+	}
+}
+
+func TestCompiledRegexSemantics(t *testing.T) {
+	cases := []struct {
+		pattern, value string
+		want           bool
+	}{
+		{`v?\d+\.\d+\.\d+`, "v1.9.0", true},
+		{`v?\d+\.\d+\.\d+`, "v2.0.0-rc.1", false},
+		{`v?\d+\.\d+\.\d+`, "v1.9.0-12-ge7e744a7", false},
+		{`v\d+\.\d+\.\d+-\d+-g[0-9a-f]+`, "v1.9.0-12-ge7e744a7", true},
+		{`(?i)latest`, "LATEST", true},
+		{`(?m)^latest$`, "latest\nother", false},
+		{`(?m)^latest$`, "other\nlatest", false},
+		{`foo|bar`, "foobar", false},
+		{`foo|bar`, "bar", true},
+		{`\Qfoo`, "foo", true},
+		{`\Qfoo`, "prefixfoo", false},
+		{`\Qfoo`, "foo)$", false},
+		{`(?P<major>\d+)\.[[:digit:]]+`, "12.3", true},
+		{`\p{L}+`, "发布", true},
+		{`[a-z]{2,3}`, "abc", true},
+		{``, "any\nvalue", true},
+		{` latest `, "latest", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.pattern+"/"+tc.value, func(t *testing.T) {
+			m, err := Compile(tc.pattern, KindRegex)
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Equal(t, tc.want, m.MatchString(tc.value))
+			assert.Equal(t, tc.want, m.MatchString(tc.value), "reusable compiled matcher")
+		})
+	}
+	for _, expression := range []string{`(?=foo)`, `(?!foo)`, `(?<=foo)`, `(foo)\1`, `foo)|(bar`, strings.Repeat("a", MaxRegexLength+1)} {
+		assert.Error(t, Validate(expression, KindRegex), expression)
+	}
+	assert.NoError(t, Validate(strings.Repeat("界", MaxRegexLength), KindRegex))
+	assert.Error(t, Validate("", "unknown"))
+}
+
+func TestCompiledDoublestarCompatibility(t *testing.T) {
+	for _, expression := range []string{"", "**", "v*.*.*", "library/**", "{redis,mysql}", "[a-z]*", " latest "} {
+		m, err := Compile(expression, "")
+		if !assert.NoError(t, err) {
+			continue
+		}
+		for _, value := range []string{"", "latest", " latest ", "v1.9.0", "v2.0.0-rc.1", "library/team/nginx", "redis", "mysql"} {
+			expected := true
+			if expression != "" {
+				expected, err = doublestar.Match(expression, value)
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, expected, m.MatchString(value), "%q matching %q", expression, value)
+		}
 	}
 }

@@ -91,7 +91,8 @@
                             <span>{{
                                 formatPattern(
                                     rule?.scope_selectors?.repository[0]
-                                        ?.pattern
+                                        ?.pattern,
+                                    rule?.scope_selectors?.repository[0]?.kind
                                 )
                             }}</span>
                             <span>,</span>
@@ -103,7 +104,7 @@
                                     | translate
                             }}</span>
                             <span id="{{ 'tag-selectors-patten' + i }}">{{
-                                formatPattern(rule?.tag_selectors[0]?.pattern)
+                                formatPattern(rule?.tag_selectors[0]?.pattern, rule?.tag_selectors[0]?.kind)
                             }}</span>
                             @if ( rule?.tag_selectors[1]?.pattern &&
                             rule?.tag_selectors[1]?.pattern ) {

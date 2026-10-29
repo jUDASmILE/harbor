@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goharbor/harbor/src/lib/errors"
 	"github.com/goharbor/harbor/src/pkg/reg/model"
@@ -285,4 +286,15 @@ func TestValidate(t *testing.T) {
 	}
 	err = policy.Validate()
 	assert.Nil(err)
+}
+
+func TestParseFiltersPreservesPatternKind(t *testing.T) {
+	filters, err := parseFilters(`[{"type":"tag","kind":"regex","value":"v[0-9]+"},{"type":"name","value":"library/**"}]`)
+	require.NoError(t, err)
+	require.Equal(t, "regex", filters[0].Kind)
+	require.Empty(t, filters[1].Kind)
+	filters, err = parseFilters(`[{"kind":"tag","pattern":"v*"}]`)
+	require.NoError(t, err)
+	require.Equal(t, model.FilterTypeTag, filters[0].Type)
+	require.Empty(t, filters[0].Kind)
 }

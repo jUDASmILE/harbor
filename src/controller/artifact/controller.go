@@ -290,7 +290,11 @@ func (c *controller) List(ctx context.Context, query *q.Query, option *Option) (
 
 	var res []*Artifact
 	for _, art := range arts {
-		res = append(res, c.assembleArtifact(ctx, art, option))
+		assembled, err := c.assembleArtifact(ctx, art, option)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, assembled)
 	}
 	return res, nil
 }
@@ -300,7 +304,7 @@ func (c *controller) Get(ctx context.Context, id int64, option *Option) (*Artifa
 	if err != nil {
 		return nil, err
 	}
-	return c.assembleArtifact(ctx, art, option), nil
+	return c.assembleArtifact(ctx, art, option)
 }
 
 func (c *controller) GetByReference(ctx context.Context, repository, reference string, option *Option) (*Artifact, error) {
@@ -317,7 +321,7 @@ func (c *controller) getByDigest(ctx context.Context, repository, digest string,
 	if err != nil {
 		return nil, err
 	}
-	return c.assembleArtifact(ctx, art, option), nil
+	return c.assembleArtifact(ctx, art, option)
 }
 
 func (c *controller) getByTag(ctx context.Context, repository, tag string, option *Option) (*Artifact, error) {
@@ -731,7 +735,7 @@ func (c *controller) Walk(ctx context.Context, root *Artifact, walkFn func(*Arti
 }
 
 // assemble several part into a single artifact
-func (c *controller) assembleArtifact(ctx context.Context, art *artifact.Artifact, option *Option) *Artifact {
+func (c *controller) assembleArtifact(ctx context.Context, art *artifact.Artifact, option *Option) (*Artifact, error) {
 	artifact := &Artifact{
 		Artifact: *art,
 	}
@@ -742,10 +746,12 @@ func (c *controller) assembleArtifact(ctx context.Context, art *artifact.Artifac
 	c.populateIcon(artifact)
 
 	if option == nil {
-		return artifact
+		return artifact, nil
 	}
 	if option.WithTag {
-		c.populateTags(ctx, artifact, option.TagOption)
+		if err := c.populateTags(ctx, artifact, option.TagOption); err != nil {
+			return nil, err
+		}
 	}
 	if option.WithLabel {
 		c.populateLabels(ctx, artifact)
@@ -756,7 +762,7 @@ func (c *controller) assembleArtifact(ctx context.Context, art *artifact.Artifac
 	if option.WithInheritedAccessory {
 		c.populateInheritedAccessories(ctx, artifact)
 	}
-	return artifact
+	return artifact, nil
 }
 
 func (c *controller) populateIcon(art *Artifact) {
@@ -769,17 +775,17 @@ func (c *controller) populateIcon(art *Artifact) {
 	}
 }
 
-func (c *controller) populateTags(ctx context.Context, art *Artifact, option *tag.Option) {
+func (c *controller) populateTags(ctx context.Context, art *Artifact, option *tag.Option) error {
 	tags, err := c.tagCtl.List(ctx, &q.Query{
 		Keywords: map[string]any{
 			"artifact_id": art.ID,
 		},
 	}, option)
 	if err != nil {
-		log.Errorf("failed to list tag of artifact %d: %v", art.ID, err)
-		return
+		return errors.Wrapf(err, "failed to list tags of artifact %d", art.ID)
 	}
 	art.Tags = tags
+	return nil
 }
 
 func (c *controller) populateLabels(ctx context.Context, art *Artifact) {
@@ -905,7 +911,11 @@ func (c *controller) ListWithLatest(ctx context.Context, query *q.Query, option 
 	}
 	var res []*Artifact
 	for _, art := range arts {
-		res = append(res, c.assembleArtifact(ctx, art, option))
+		assembled, err := c.assembleArtifact(ctx, art, option)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, assembled)
 	}
 	return res, nil
 }

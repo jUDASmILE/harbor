@@ -86,8 +86,10 @@ func (suite *TestBuilderSuite) SetupSuite() {
 		doublestar.RepoExcludes,
 		doublestar.NSMatches,
 		doublestar.NSExcludes,
-	}, doublestar.New)
-	index.Register(label.Kind, []string{label.With, label.Without}, label.New)
+	}, doublestar.NewValidated)
+	index.Register(label.Kind, []string{label.With, label.Without}, func(decoration string, pattern any, extras string) (selector.Selector, error) {
+		return label.New(decoration, pattern, extras), nil
+	})
 	index3.Register(action.Retain, action.NewRetainAction)
 
 	suite.oldClient = dep.DefaultClient

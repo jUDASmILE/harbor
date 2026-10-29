@@ -17,8 +17,8 @@ package filter
 import (
 	"fmt"
 
+	"github.com/goharbor/harbor/src/lib/pattern"
 	"github.com/goharbor/harbor/src/pkg/reg/model"
-	"github.com/goharbor/harbor/src/pkg/reg/util"
 )
 
 // DoFilterRepositories filter repositories according to the filters
@@ -37,9 +37,14 @@ func BuildRepositoryFilters(filters []*model.Filter) (RepositoryFilters, error) 
 		var f RepositoryFilter
 		switch filter.Type {
 		case model.FilterTypeName:
-			if pattern, ok := filter.Value.(string); ok {
+			if expression, ok := filter.Value.(string); ok {
+				matcher, err := pattern.Compile(expression, filter.Kind)
+				if err != nil {
+					return nil, err
+				}
 				f = &repositoryNameFilter{
-					pattern: pattern,
+					matcher: matcher,
+					pattern: expression,
 				}
 			} else {
 				return nil, fmt.Errorf("invalid filter value type for repository name filter, expecting string")
@@ -73,6 +78,8 @@ func (r RepositoryFilters) Filter(repositories []*model.Repository) ([]*model.Re
 }
 
 type repositoryNameFilter struct {
+	matcher *pattern.Matcher
+	kind    string
 	pattern string
 }
 
@@ -80,13 +87,16 @@ func (r *repositoryNameFilter) Filter(repositories []*model.Repository) ([]*mode
 	if len(r.pattern) == 0 {
 		return repositories, nil
 	}
-	var result []*model.Repository
-	for _, repository := range repositories {
-		match, err := util.Match(r.pattern, repository.Name)
+	if r.matcher == nil {
+		matcher, err := pattern.Compile(r.pattern, r.kind)
 		if err != nil {
 			return nil, err
 		}
-		if match {
+		r.matcher = matcher
+	}
+	var result []*model.Repository
+	for _, repository := range repositories {
+		if r.matcher.MatchString(repository.Name) {
 			result = append(result, repository)
 			continue
 		}

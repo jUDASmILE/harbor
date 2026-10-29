@@ -225,3 +225,10 @@ func TestParamValid(t *testing.T) {
 	require.True(t, v.HasErrors())
 	require.EqualValues(t, "Parameters", v.Errors[0].Field)
 }
+
+func TestValidateRetentionPolicyRejectsInvalidPatterns(t *testing.T) {
+	p := &Metadata{Rules: []rule.Metadata{{TagSelectors: []*rule.Selector{{Kind: "regex", Decoration: "matches", Pattern: "["}}}}}
+	require.Error(t, p.ValidateRetentionPolicy())
+	p.Rules[0].TagSelectors[0].Pattern = `v?\d+\.\d+\.\d+`
+	require.NoError(t, p.ValidateRetentionPolicy())
+}

@@ -225,7 +225,7 @@ func (a *adapter) listRepositories(filters []*model.Filter) ([]*model.Repository
 	var totalRepos []string
 	// if the pattern of repository name filter is a specific repository name, just returns
 	// the parsed repositories and will check the existence later when filtering the tags
-	if paths, ok := util.IsSpecificPath(pattern); ok {
+	if paths, ok := util.SpecificPaths(pattern, util.FilterKind(filters, model.FilterTypeName)); ok {
 		totalRepos = paths
 	} else {
 		// search repositories from catalog API

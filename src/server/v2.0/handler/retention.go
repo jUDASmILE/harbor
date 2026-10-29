@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,7 @@ import (
 	retentionCtl "github.com/goharbor/harbor/src/controller/retention"
 	"github.com/goharbor/harbor/src/jobservice/job"
 	"github.com/goharbor/harbor/src/lib/errors"
+	"github.com/goharbor/harbor/src/lib/selector/selectors/index"
 	"github.com/goharbor/harbor/src/pkg"
 	"github.com/goharbor/harbor/src/pkg/project/metadata"
 	"github.com/goharbor/harbor/src/pkg/retention/policy"
@@ -110,26 +112,6 @@ var (
 				Params:       []*models.RetentionRuleParamMetadata{},
 			},
 		},
-		ScopeSelectors: []*models.RetentionSelectorMetadata{
-			{
-				DisplayText: "Repositories",
-				Kind:        "doublestar",
-				Decorations: []string{
-					"repoMatches",
-					"repoExcludes",
-				},
-			},
-		},
-		TagSelectors: []*models.RetentionSelectorMetadata{
-			{
-				DisplayText: "Tags",
-				Kind:        "doublestar",
-				Decorations: []string{
-					"matches",
-					"excludes",
-				},
-			},
-		},
 	}
 )
 
@@ -142,7 +124,31 @@ func (r *retentionAPI) Prepare(ctx context.Context, _ string, _ any) middleware.
 }
 
 func (r *retentionAPI) GetRentenitionMetadata(_ context.Context, _ operation.GetRentenitionMetadataParams) middleware.Responder {
-	return operation.NewGetRentenitionMetadataOK().WithPayload(rentenitionMetadataPayload)
+	payload := *rentenitionMetadataPayload
+	selectors := index.Index()
+	sort.Slice(selectors, func(i, j int) bool { return selectors[i].Kind < selectors[j].Kind })
+	for _, meta := range selectors {
+		var tags, repositories []string
+		for _, decoration := range meta.Decorations {
+			switch decoration {
+			case "matches", "excludes":
+				tags = append(tags, decoration)
+			case "repoMatches", "repoExcludes":
+				repositories = append(repositories, decoration)
+			}
+		}
+		if len(tags) > 0 {
+			payload.TagSelectors = append(payload.TagSelectors, &models.RetentionSelectorMetadata{
+				DisplayText: "Tags", Kind: meta.Kind, Decorations: tags,
+			})
+		}
+		if len(repositories) > 0 {
+			payload.ScopeSelectors = append(payload.ScopeSelectors, &models.RetentionSelectorMetadata{
+				DisplayText: "Repositories", Kind: meta.Kind, Decorations: repositories,
+			})
+		}
+	}
+	return operation.NewGetRentenitionMetadataOK().WithPayload(&payload)
 }
 
 func (r *retentionAPI) GetRetention(ctx context.Context, params operation.GetRetentionParams) middleware.Responder {

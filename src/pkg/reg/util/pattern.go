@@ -16,17 +16,72 @@ package util
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
-	"github.com/bmatcuk/doublestar"
+	"github.com/goharbor/harbor/src/lib/pattern"
+	"github.com/goharbor/harbor/src/pkg/reg/model"
 )
 
-// Match returns whether the str matches the pattern
-func Match(pattern, str string) (bool, error) {
-	if len(pattern) == 0 {
-		return true, nil
+// Match returns whether str matches the pattern. An omitted kind preserves glob matching.
+func Match(expression, str string, kinds ...string) (bool, error) {
+	kind := ""
+	if len(kinds) > 0 {
+		kind = kinds[0]
 	}
-	return doublestar.Match(pattern, str)
+	matcher, err := pattern.Compile(expression, kind)
+	if err != nil {
+		return false, err
+	}
+	return matcher.MatchString(str), nil
+}
+
+// Compile prepares a reusable matcher before an adapter enumerates resources.
+func Compile(expression, kind string) (*pattern.Matcher, error) {
+	return pattern.Compile(expression, kind)
+}
+
+// FilterKind returns the engine selected for the specified filter.
+func FilterKind(filters []*model.Filter, filterType string) string {
+	for _, filter := range filters {
+		if filter.Type == filterType {
+			return filter.Kind
+		}
+	}
+	return ""
+}
+
+// ListingPattern returns a glob-safe namespace prefix for repository discovery.
+// Regex syntax must never be interpreted as a glob or an exact remote name.
+func ListingPattern(expression, kind string) string {
+	if kind != pattern.KindRegex {
+		return expression
+	}
+	re, err := regexp.Compile(expression)
+	if err != nil {
+		return ""
+	}
+	prefix, _ := re.LiteralPrefix()
+	if index := strings.Index(prefix, "/"); index >= 0 && !strings.ContainsAny(prefix[:index], "*?[]{}\\,") {
+		return prefix[:index] + "/**"
+	}
+	return ""
+}
+
+// SpecificPaths applies the exact-repository optimization only when safe for the engine.
+func SpecificPaths(expression, kind string) ([]string, bool) {
+	if kind != pattern.KindRegex {
+		return IsSpecificPath(expression)
+	}
+	re, err := regexp.Compile(expression)
+	if err != nil {
+		return nil, false
+	}
+	prefix, complete := re.LiteralPrefix()
+	if complete && prefix != "" {
+		return []string{prefix}, true
+	}
+	return nil, false
 }
 
 // IsSpecificPath checks whether the input path is a specified string

@@ -22,6 +22,7 @@ import (
 
 	"github.com/goharbor/harbor/src/common/utils"
 	"github.com/goharbor/harbor/src/lib/errors"
+	"github.com/goharbor/harbor/src/lib/pattern"
 	"github.com/goharbor/harbor/src/lib/q"
 )
 
@@ -103,6 +104,36 @@ type FilterType = string
 type Filter struct {
 	Type  FilterType `json:"type"`
 	Value any        `json:"value"`
+	// Kind selects the pattern engine; omitted means doublestar.
+	Kind string `json:"kind,omitempty"`
+}
+
+// Validate rejects invalid filter engines and expressions before a policy is saved.
+func (f *Filter) Validate() error {
+	if f == nil {
+		return errors.New("nil policy filter")
+	}
+	if err := pattern.ValidateKind(f.Kind); err != nil {
+		return err
+	}
+	switch f.Type {
+	case FilterTypeRepository, FilterTypeTag, FilterTypeLabel:
+		value, ok := f.Value.(string)
+		if !ok {
+			return errors.Errorf("filter %s requires a string pattern", f.Type)
+		}
+		// Legacy labels are an exact comma-separated list, not a glob.
+		if f.Type != FilterTypeLabel || f.Kind == pattern.KindRegex {
+			return pattern.Validate(value, f.Kind)
+		}
+	case FilterTypeSignature, FilterTypeVulnerability:
+		if f.Kind == pattern.KindRegex {
+			return errors.Errorf("filter %s does not accept a pattern engine", f.Type)
+		}
+	default:
+		return errors.Errorf("unknown filter type: %s", f.Type)
+	}
+	return nil
 }
 
 // TriggerType represents the type of trigger.
@@ -120,7 +151,11 @@ type Trigger struct {
 
 // ValidatePreheatPolicy validate preheat policy
 func (s *Schema) ValidatePreheatPolicy() error {
-	// currently only validate cron string of preheat policy
+	for _, f := range s.Filters {
+		if err := f.Validate(); err != nil {
+			return errors.New(nil).WithCode(errors.BadRequestCode).WithMessagef("invalid preheat filter: %v", err)
+		}
+	}
 	if s.Trigger != nil && s.Trigger.Type == TriggerTypeScheduled && len(s.Trigger.Settings.Cron) > 0 {
 		if err := utils.ValidateCronString(s.Trigger.Settings.Cron); err != nil {
 			return errors.New(nil).WithCode(errors.BadRequestCode).

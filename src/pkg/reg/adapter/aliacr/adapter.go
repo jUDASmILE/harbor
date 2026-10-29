@@ -284,12 +284,15 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 			repoPattern = f.Value.(string)
 		}
 	}
-	var namespacePattern = strings.Split(repoPattern, "/")[0]
 
 	log.Debugf("\nrepoPattern=%s tagsPattern=%s\n\n", repoPattern, tagsPattern)
 
+	nameMatcher, err := util.Compile(repoPattern, util.FilterKind(filters, model.FilterTypeName))
+	if err != nil {
+		return nil, err
+	}
 	// get namespaces
-	namespaces, err := a.listCandidateNamespaces(namespacePattern)
+	namespaces, err := a.listCandidateNamespaces(strings.Split(util.ListingPattern(repoPattern, util.FilterKind(filters, model.FilterTypeName)), "/")[0])
 	if err != nil {
 		return nil, err
 	}
@@ -306,13 +309,9 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 		log.Debugf("\nnamespace: %s \t repositories: %#v\n\n", namespace, repos)
 
 		for _, repo := range repos {
-			var ok bool
 			var repoName = filepath.Join(repo.Namespace, repo.Name)
-			ok, err = util.Match(repoPattern, repoName)
+			ok := nameMatcher.MatchString(repoName)
 			log.Debugf("\n Repository: %s\t repoPattern: %s\t Match: %v\n", repoName, repoPattern, ok)
-			if err != nil {
-				return nil, err
-			}
 			if ok {
 				repositories = append(repositories, repo)
 			}

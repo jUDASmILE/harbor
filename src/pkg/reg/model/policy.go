@@ -14,7 +14,10 @@
 
 package model
 
-import "github.com/goharbor/harbor/src/lib/errors"
+import (
+	"github.com/goharbor/harbor/src/lib/errors"
+	"github.com/goharbor/harbor/src/lib/pattern"
+)
 
 // const definition
 const (
@@ -36,17 +39,29 @@ const (
 // Filter holds the info of the filter
 type Filter struct {
 	Type       string `json:"type"`
+	Kind       string `json:"kind,omitempty"`
 	Value      any    `json:"value"`
 	Decoration string `json:"decoration,omitempty"`
 }
 
 func (f *Filter) Validate() error {
+	if err := pattern.ValidateKind(f.Kind); err != nil {
+		return errors.New(err).WithCode(errors.BadRequestCode)
+	}
+	if f.Type == FilterTypeResource && f.Kind != "" {
+		return errors.New(nil).WithCode(errors.BadRequestCode).WithMessage("resource filters do not support a pattern kind")
+	}
 	switch f.Type {
 	case FilterTypeResource, FilterTypeName, FilterTypeTag:
 		value, ok := f.Value.(string)
 		if !ok {
 			return errors.New(nil).WithCode(errors.BadRequestCode).
 				WithMessage("the type of filter value isn't string")
+		}
+		if f.Type != FilterTypeResource {
+			if err := pattern.Validate(value, f.Kind); err != nil {
+				return errors.New(err).WithCode(errors.BadRequestCode).WithMessagef("invalid %s filter pattern: %v", f.Type, err)
+			}
 		}
 		if f.Type == FilterTypeResource {
 			rt := value
@@ -68,10 +83,15 @@ func (f *Filter) Validate() error {
 				WithMessage("the type of label filter value isn't string slice")
 		}
 		for _, label := range labels {
-			_, ok := label.(string)
+			labelPattern, ok := label.(string)
 			if !ok {
 				return errors.New(nil).WithCode(errors.BadRequestCode).
 					WithMessage("the type of label filter value isn't string slice")
+			}
+			if f.Kind == pattern.KindRegex {
+				if err := pattern.Validate(labelPattern, f.Kind); err != nil {
+					return errors.New(err).WithCode(errors.BadRequestCode).WithMessagef("invalid label filter pattern: %v", err)
+				}
 			}
 		}
 	default:

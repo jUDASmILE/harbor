@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+    encodePattern,
+    validatePattern,
+} from '../../../../shared/units/pattern.util';
+import {
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     Component,
@@ -87,6 +91,10 @@ export class AddP2pPolicyComponent implements OnInit, OnDestroy {
     @ViewChild(InlineAlertComponent)
     inlineAlert: InlineAlertComponent;
     policy: PreheatPolicy = {};
+    reposKind = 'doublestar';
+    tagsKind = 'doublestar';
+    labelsKind = 'doublestar';
+    originKindsForEdit: string[] = ['doublestar', 'doublestar', 'doublestar'];
     repos: string;
     tags: string;
     onlySignedImages: boolean = false;
@@ -216,6 +224,9 @@ export class AddP2pPolicyComponent implements OnInit, OnDestroy {
     resetForAdd() {
         this.inlineAlert.close();
         this.policy = {};
+        this.reposKind = 'doublestar';
+        this.tagsKind = 'doublestar';
+        this.labelsKind = 'doublestar';
         this.repos = null;
         this.tags = null;
         this.labels = null;
@@ -275,50 +286,24 @@ export class AddP2pPolicyComponent implements OnInit, OnDestroy {
     }
 
     addOrSave(isAdd: boolean) {
+        if (this.hasInvalidPattern()) {
+            return;
+        }
         const policy: PreheatPolicy = {};
         Object.assign(policy, this.policy);
         policy.provider_id = +policy.provider_id;
         const filters: any[] = [];
-        if (this.repos) {
-            if (
-                this.repos.indexOf(',') !== -1 &&
-                this.repos.indexOf('{') === -1 &&
-                this.repos.indexOf('}') === -1
-            ) {
+        for (const [type, value, kind] of [
+            [FILTER_TYPE.REPOS, this.repos, this.reposKind],
+            [FILTER_TYPE.TAG, this.tags, this.tagsKind],
+            [FILTER_TYPE.LABEL, this.labels, this.labelsKind],
+        ]) {
+            if (value || kind === 'regex') {
                 filters.push({
-                    type: FILTER_TYPE.REPOS,
-                    value: `{${this.repos}}`,
+                    type,
+                    kind,
+                    value: encodePattern(value || '', kind),
                 });
-            } else {
-                filters.push({ type: FILTER_TYPE.REPOS, value: this.repos });
-            }
-        }
-        if (this.tags) {
-            if (
-                this.tags.indexOf(',') !== -1 &&
-                this.tags.indexOf('{') === -1 &&
-                this.tags.indexOf('}') === -1
-            ) {
-                filters.push({
-                    type: FILTER_TYPE.TAG,
-                    value: `{${this.tags}}`,
-                });
-            } else {
-                filters.push({ type: FILTER_TYPE.TAG, value: this.tags });
-            }
-        }
-        if (this.labels) {
-            if (
-                this.labels.indexOf(',') !== -1 &&
-                this.labels.indexOf('{') === -1 &&
-                this.labels.indexOf('}') === -1
-            ) {
-                filters.push({
-                    type: FILTER_TYPE.LABEL,
-                    value: `{${this.labels}}`,
-                });
-            } else {
-                filters.push({ type: FILTER_TYPE.LABEL, value: this.labels });
             }
         }
         policy.filters = JSON.stringify(filters);
@@ -402,7 +387,18 @@ export class AddP2pPolicyComponent implements OnInit, OnDestroy {
         }
     }
 
+    hasInvalidPattern(): boolean {
+        return !!(
+            validatePattern(this.repos, this.reposKind) ||
+            validatePattern(this.tags, this.tagsKind) ||
+            validatePattern(this.labels, this.labelsKind)
+        );
+    }
+
     valid(): boolean {
+        if (this.hasInvalidPattern()) {
+            return false;
+        }
         if (this.triggerType === TRIGGER.SCHEDULED && !this.cron) {
             return false;
         }
@@ -422,6 +418,12 @@ export class AddP2pPolicyComponent implements OnInit, OnDestroy {
     }
 
     hasChange(): boolean {
+        if (
+            JSON.stringify(this.originKindsForEdit) !==
+            JSON.stringify([this.reposKind, this.tagsKind, this.labelsKind])
+        ) {
+            return true;
+        }
         // eslint-disable-next-line eqeqeq
         if (this.policy.provider_id != this.originPolicyForEdit.provider_id) {
             return true;

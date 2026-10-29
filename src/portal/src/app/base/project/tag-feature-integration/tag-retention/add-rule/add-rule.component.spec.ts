@@ -69,4 +69,33 @@ describe('AddRuleComponent', () => {
     it('should create', () => {
         expect(component).toBeTruthy();
     });
+    it('preserves regex patterns when editing and saving', () => {
+        component.repoKind = 'regex';
+        component.tagsKind = 'regex';
+        component.repositories = 'library/(nginx|redis)';
+        component.tagsInput = '\\Q release \\E[0-9]{2,3}';
+        expect(component.tagsInput).toBe('\\Q release \\E[0-9]{2,3}');
+        const emitted = spyOn(component.clickAdd, 'emit');
+        component.add();
+        expect(emitted).toHaveBeenCalledWith(component.rule);
+        expect(component.rule.tag_selectors[0].pattern).toBe(
+            '\\Q release \\E[0-9]{2,3}'
+        );
+    });
+
+    it('treats otherwise identical patterns with different engines as distinct rules', () => {
+        component.repositories = 'nginx';
+        component.tagsInput = 'latest';
+        const other = JSON.parse(JSON.stringify(component.rule));
+        other.tag_selectors[0].kind = 'regex';
+        expect(component.isSameRule(other)).toBeFalse();
+    });
+    it('preserves the stored pattern when switching engines', () => {
+        component.tagsInput = 'a,b';
+        expect(component.rule.tag_selectors[0].pattern).toBe('{a,b}');
+        component.tagsKind = 'regex';
+        expect(component.tagsInput).toBe('{a,b}');
+        component.tagsInput = 'a{2,3}';
+        expect(component.rule.tag_selectors[0].pattern).toBe('a{2,3}');
+    });
 });

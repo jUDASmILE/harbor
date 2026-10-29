@@ -228,3 +228,28 @@ func (suite *FilterTestSuite) TestDefaultPatterns2() {
 	require.NoError(suite.T(), err, "do filters")
 	require.Equal(suite.T(), 7, len(res), "number of matched candidates")
 }
+
+func TestRegexFilters(t *testing.T) {
+	candidates := []*selector.Candidate{
+		{Repository: "library/nginx", Tags: []string{"v1.9.0", "latest"}, Labels: []string{"release-ready"}},
+		{Repository: "library/nginx", Tags: []string{"v2.0.0-rc.1"}, Labels: []string{"release-ready"}},
+		{Repository: "other/library/nginx", Tags: []string{"v1.9.0"}, Labels: []string{"release-ready"}},
+	}
+	p := &policy.Schema{Filters: []*policy.Filter{
+		{Type: policy.FilterTypeRepository, Kind: "regex", Value: `library/.*`},
+		{Type: policy.FilterTypeTag, Kind: "regex", Value: `v\d+\.\d+\.\d+`},
+		{Type: policy.FilterTypeLabel, Kind: "regex", Value: `release-.*`},
+	}}
+	filter := NewFilter()
+	actual, err := filter.BuildFrom(p).Filter(candidates)
+	require.NoError(t, err)
+	require.Equal(t, candidates[:1], actual)
+	p.Filters[1].Value = `(?=invalid)`
+	_, err = filter.BuildFrom(p).Filter(candidates)
+	require.Error(t, err)
+	// A failed load cannot leave partial selectors or errors on the next load.
+	p.Filters[1].Value = `.*`
+	actual, err = filter.BuildFrom(p).Filter(candidates)
+	require.NoError(t, err)
+	require.Len(t, actual, 2)
+}

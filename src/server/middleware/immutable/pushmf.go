@@ -24,7 +24,6 @@ import (
 	"github.com/goharbor/harbor/src/lib"
 	errors "github.com/goharbor/harbor/src/lib/errors"
 	lib_http "github.com/goharbor/harbor/src/lib/http"
-	"github.com/goharbor/harbor/src/lib/log"
 )
 
 // Middleware ...
@@ -62,8 +61,11 @@ func handlePush(req *http.Request) error {
 		TagOption: &tag.Option{WithImmutableStatus: true},
 	})
 	if err != nil {
-		log.Debugf("failed to list artifact, %v", err.Error())
-		return nil
+		if errors.IsNotFoundErr(err) {
+			// A new tag has no existing immutable binding to protect.
+			return nil
+		}
+		return err
 	}
 
 	_, repoName := common_util.ParseRepository(art.Repository)

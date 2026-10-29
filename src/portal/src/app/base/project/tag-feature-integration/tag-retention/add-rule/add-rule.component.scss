@@ -9,11 +9,13 @@
 }
 
 .height-72 {
-  height: 72px;
+  min-height: 72px;
+    padding-bottom: .5rem;
 }
 
 .height-95 {
-  height: 95px;
+  min-height: 95px;
+    padding-bottom: .5rem;
 }
 
 .display-none {
@@ -26,7 +28,7 @@
 }
 
 .modal-body {
-  overflow-y: clip;
+  overflow-y: auto;
 }
 
 .tootip {

@@ -6,6 +6,9 @@
         ><span class="badge badge-3 ml-5"
             >{{
                 retention?.rules?.length ? retention?.rules?.length : 0
+
+
+
             }}/15</span
         >
         @if (loadingRule) {
@@ -88,7 +91,8 @@
                             <span>{{
                                 formatPattern(
                                     rule?.scope_selectors?.repository[0]
-                                        ?.pattern
+                                        ?.pattern,
+                                    rule?.scope_selectors?.repository[0]?.kind
                                 )
                             }}</span>
                             <span>,</span>
@@ -115,7 +119,7 @@
                                     | translate
                             }}</span>
                             <span>{{
-                                formatPattern(rule?.tag_selectors[0]?.pattern)
+                                formatPattern(rule?.tag_selectors[0]?.pattern, rule?.tag_selectors[0]?.kind)
                             }}</span>
                             <span class="color-97">{{
                                 showUntagged(rule?.tag_selectors[0]?.extras)

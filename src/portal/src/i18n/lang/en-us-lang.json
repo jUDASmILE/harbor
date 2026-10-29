@@ -2015,5 +2015,12 @@
         "PUSH_PERMISSION_TOOLTIP": "The push permission also requires the pull permission.",
         "NOT_FOUND": "We couldn't find any roles!",
         "SEARCH_BY_NAME": "Search by name"
+    },
+    "PATTERN": {
+        "ENGINE": "Pattern engine",
+        "REGEX_HELP": "Full-string RE2 match; for example v?\\d+\\.\\d+\\.\\d+. Maximum 512 characters. Lookaround and backreferences are unsupported.",
+        "GLOB_HELP": "Glob match; for example library/** or release-*. Separate alternatives with commas.",
+        "REGEX_INVALID": "The regular expression is invalid or uses unsupported RE2 syntax.",
+        "TOO_LONG": "The regular expression must not exceed 512 characters."
     }
 }

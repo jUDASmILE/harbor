@@ -158,7 +158,11 @@ func (c *controller) List(ctx context.Context, query *q.Query, option *Option) (
 	}
 	var tags []*Tag
 	for _, tg := range tgs {
-		tags = append(tags, c.assembleTag(ctx, tg, option))
+		assembled, err := c.assembleTag(ctx, tg, option)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, assembled)
 	}
 	return tags, nil
 }
@@ -176,7 +180,7 @@ func (c *controller) Get(ctx context.Context, id int64, option *Option) (tag *Ta
 		return tag, nil
 	}
 
-	return c.assembleTag(ctx, &tag.Tag, option), nil
+	return c.assembleTag(ctx, &tag.Tag, option)
 }
 
 // Create ...
@@ -235,23 +239,25 @@ func (c *controller) DeleteTags(ctx context.Context, ids []int64) (err error) {
 }
 
 // assemble several part into a single tag
-func (c *controller) assembleTag(ctx context.Context, tag *model_tag.Tag, option *Option) *Tag {
+func (c *controller) assembleTag(ctx context.Context, tag *model_tag.Tag, option *Option) (*Tag, error) {
 	t := &Tag{
 		Tag: *tag,
 	}
 	if option == nil {
-		return t
+		return t, nil
 	}
 	if option.WithImmutableStatus {
-		c.populateImmutableStatus(ctx, t)
+		if err := c.populateImmutableStatus(ctx, t); err != nil {
+			return nil, err
+		}
 	}
-	return t
+	return t, nil
 }
 
-func (c *controller) populateImmutableStatus(ctx context.Context, tag *Tag) {
+func (c *controller) populateImmutableStatus(ctx context.Context, tag *Tag) error {
 	artifact, err := c.artMgr.Get(ctx, tag.ArtifactID)
 	if err != nil {
-		return
+		return errors.Wrap(err, "cannot determine tag immutability")
 	}
 	_, repoName := utils.ParseRepository(artifact.RepositoryName)
 	matched, err := c.immutableMtr.Match(ctx, artifact.ProjectID, selector.Candidate{
@@ -260,7 +266,8 @@ func (c *controller) populateImmutableStatus(ctx context.Context, tag *Tag) {
 		NamespaceID: artifact.ProjectID,
 	})
 	if err != nil {
-		return
+		return errors.Wrap(err, "cannot determine tag immutability")
 	}
 	tag.Immutable = matched
+	return nil
 }

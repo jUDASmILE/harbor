@@ -234,6 +234,7 @@ func (a *Adapter) ListProjects(filters []*model.Filter) ([]*Project, error) {
 			break
 		}
 	}
+	pattern = util.ListingPattern(pattern, util.FilterKind(filters, model.FilterTypeName))
 	var projects []*Project
 	if len(pattern) > 0 {
 		substrings := strings.Split(pattern, "/")

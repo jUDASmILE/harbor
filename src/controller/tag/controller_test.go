@@ -245,11 +245,35 @@ func (c *controllerTestSuite) TestAssembleTag() {
 
 	c.artMgr.On("Get", mock.Anything, mock.Anything).Return(art, nil)
 	mock.OnAnything(c.immutableMtr, "Match").Return(true, nil)
-	tag := c.ctl.assembleTag(nil, tg, option)
+	tag, err := c.ctl.assembleTag(nil, tg, option)
+	c.Require().NoError(err)
 	c.Require().NotNil(tag)
 	c.Equal(tag.ID, tg.ID)
 	c.Equal(true, tag.Immutable)
 	// TODO check signature
+}
+
+// An immutability evaluation error must block overwrites and deletes.
+func (c *controllerTestSuite) TestImmutableEvaluationFailure() {
+	c.tagMgr.On("List", mock.Anything, mock.Anything).Return([]*tag.Tag{{ID: 1, RepositoryID: 1, ArtifactID: 1, Name: "v1.2.3"}}, nil)
+	c.tagMgr.On("Get", mock.Anything, mock.Anything).Return(&tag.Tag{ID: 1, RepositoryID: 1, ArtifactID: 1, Name: "v1.2.3"}, nil)
+	c.artMgr.On("Get", mock.Anything, mock.Anything).Return(&pkg_artifact.Artifact{ID: 1}, nil)
+	failure := errors.New("invalid persisted immutability pattern")
+	mock.OnAnything(c.immutableMtr, "Match").Return(false, failure)
+	_, err := c.ctl.Ensure(nil, 1, 2, "v1.2.3")
+	c.Require().ErrorIs(err, failure)
+	err = c.ctl.Delete(nil, 1)
+	c.Require().ErrorIs(err, failure)
+	c.tagMgr.AssertNotCalled(c.T(), "Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	c.tagMgr.AssertNotCalled(c.T(), "Delete", mock.Anything, mock.Anything)
+}
+
+func (c *controllerTestSuite) TestImmutableArtifactLookupFailure() {
+	c.tagMgr.On("Get", mock.Anything, mock.Anything).Return(&tag.Tag{ID: 1, ArtifactID: 1}, nil)
+	failure := errors.New("artifact lookup failed")
+	c.artMgr.On("Get", mock.Anything, mock.Anything).Return(nil, failure)
+	_, err := c.ctl.Get(nil, 1, &Option{WithImmutableStatus: true})
+	c.Require().ErrorIs(err, failure)
 }
 
 func TestControllerTestSuite(t *testing.T) {

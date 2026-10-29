@@ -146,10 +146,10 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) (resources []*model.Re
 	var repositories []string
 	// if the pattern of repository name filter is a specific repository name, just returns
 	// the parsed repositories and will check the existence later when filtering the tags
-	if paths, ok := util.IsSpecificPath(pattern); ok {
+	if paths, ok := util.SpecificPaths(pattern, util.FilterKind(filters, model.FilterTypeName)); ok {
 		repositories = paths
 	} else {
-		err = errors.New("only support specific repository name")
+		err = errors.New("GitHub Container Registry requires a specific repository name; use a literal regex or a doublestar rule naming specific repositories")
 		return
 	}
 

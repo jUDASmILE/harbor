@@ -2017,5 +2017,12 @@
         "PUSH_PERMISSION_TOOLTIP": "Push izni aynı zamanda pull iznini de gerektirir.",
         "NOT_FOUND": "Hiçbir rol bulunamadı!",
         "SEARCH_BY_NAME": "İsme göre ara"
+    },
+    "PATTERN": {
+        "ENGINE": "Desen motoru",
+        "REGEX_HELP": "RE2 tüm dizeyi eşleştirir; örneğin v?\\d+\\.\\d+\\.\\d+. En fazla 512 karakter. İleri/geri bakış ve geri başvurular desteklenmez.",
+        "GLOB_HELP": "Glob eşleşmesi; örneğin library/** veya release-*. Seçenekleri virgülle ayırın.",
+        "REGEX_INVALID": "Düzenli ifade geçersiz veya desteklenmeyen RE2 sözdizimi kullanıyor.",
+        "TOO_LONG": "Düzenli ifade 512 karakteri aşamaz."
     }
 }

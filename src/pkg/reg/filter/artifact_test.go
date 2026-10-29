@@ -97,3 +97,46 @@ func TestArtifactResourceFiltersWithAccessories(t *testing.T) {
 	require.Equal(t, "sha256:acc1", result[1].Digest)
 	require.Equal(t, "sha256:subacc1", result[2].Digest)
 }
+
+func TestRegexTagFiltersKeepReleaseTagsOnSharedDigest(t *testing.T) {
+	artifacts := []*model.Artifact{
+		{Digest: "shared", Tags: []string{"v1.9.0", "latest", "v1.9.0-12-ge7e744a7"}},
+		{Tags: []string{"v2.0.0-rc.1"}},
+		{Tags: []string{"v1.10.3"}},
+		{Digest: "untagged"},
+	}
+	result, err := DoFilterArtifacts(artifacts, []*model.Filter{{Type: model.FilterTypeTag, Kind: "regex", Value: `v?\d+\.\d+\.\d+`}})
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	require.Equal(t, []string{"v1.9.0"}, result[0].Tags)
+	require.Equal(t, "shared", result[0].Digest)
+	require.Equal(t, []string{"v1.10.3"}, result[1].Tags)
+	require.Len(t, artifacts[0].Tags, 3)
+}
+
+func TestRegexTagExclusionAndUntagged(t *testing.T) {
+	artifacts := []*model.Artifact{{Tags: []string{"v1", "v1-source"}}, {Digest: "untagged"}}
+	result, err := DoFilterArtifacts(artifacts, []*model.Filter{{Type: model.FilterTypeTag, Kind: "regex", Decoration: model.Excludes, Value: `.*-source`}})
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	require.Equal(t, []string{"v1"}, result[0].Tags)
+	result, err = DoFilterArtifacts(artifacts, []*model.Filter{{Type: model.FilterTypeTag, Kind: "regex", Value: `.*`}})
+	require.NoError(t, err)
+	require.Len(t, result, 1, "an untagged artifact is never matched against an empty tag")
+}
+
+func TestRegexLabelFilter(t *testing.T) {
+	artifacts := []*model.Artifact{{Labels: []string{"release-v12", "production"}}, {Labels: []string{"release-v12-rc", "production"}}}
+	result, err := DoFilterArtifacts(artifacts, []*model.Filter{{Type: model.FilterTypeLabel, Kind: "regex", Value: []string{`release-v\d+`, `prod.*`}}})
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	_, err = BuildArtifactFilters([]*model.Filter{{Type: model.FilterTypeTag, Kind: "regex", Value: `(?=x)`}})
+	require.Error(t, err)
+}
+
+func TestEmptyRegexLabelFilterAllowsUnlabeledArtifacts(t *testing.T) {
+	artifacts := []*model.Artifact{{Labels: []string{"release"}}, {}}
+	result, err := DoFilterArtifacts(artifacts, []*model.Filter{{Type: model.FilterTypeLabel, Kind: "regex", Value: []string{""}}})
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+}

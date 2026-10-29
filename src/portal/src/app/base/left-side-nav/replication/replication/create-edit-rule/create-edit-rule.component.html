@@ -177,9 +177,18 @@
                                     'REPLICATION.' +
                                         supportedFilters[i]?.type.toUpperCase()
                                         | translate
+
+
+
                                 }}:</label
                             >
-                            @if (supportedFilters[i]?.style === 'input') {
+                            @if (supportedFilters[i]?.type !== 'resource') {
+                            <hbr-pattern-engine
+                                [serverError]="inlineAlert?.errorMessage"
+                                [kind]="filter.get('kind')?.value"
+                                (kindChange)="filter.get('kind').setValue($event)"
+                                [pattern]="supportedFilters[i]?.type === 'label' ? stringForLabelFilter : filter.get('value')?.value"></hbr-pattern-engine>
+                            } @if (supportedFilters[i]?.style === 'input') {
                             <div class="flex">
                                 @if (supportedFilters[i]?.type === 'tag') {
                                 <div class="clr-select-wrapper mr-1">
@@ -211,7 +220,7 @@
                                                 supportedFilters[i]?.type ===
                                                 'tag'
                                         }"
-                                        (input)="trimText($event)"
+                                        (input)="filter.get('kind')?.value !== 'regex' && trimText($event)"
                                         type="text"
                                         #filterValue
                                         size="14"
@@ -274,6 +283,8 @@
                                         [ngModelOptions]="{
                                             standalone: true
                                         }" />
+                                    @if (filter.get('kind')?.value !== 'regex')
+                                    {
                                     <clr-dropdown>
                                         <clr-icon
                                             class="down"
@@ -330,6 +341,7 @@
                                             }
                                         </clr-dropdown-menu>
                                     </clr-dropdown>
+                                    }
                                 </div>
                             </div>
                             } @if ( supportedFilters[i]?.style === 'radio' &&
@@ -350,17 +362,17 @@
                                     @if ( supportedFilters[i]?.type === 'name' )
                                     {
                                     <span class="tooltip-content">{{
-                                        'TOOLTIP.NAME_FILTER' | translate
+                                        (filter.get('kind')?.value === 'regex' ? 'PATTERN.REGEX_HELP' : 'TOOLTIP.NAME_FILTER') | translate
                                     }}</span>
                                     } @if ( supportedFilters[i]?.type === 'tag'
                                     ) {
                                     <span class="tooltip-content">{{
-                                        'TOOLTIP.TAG_FILTER' | translate
+                                        (filter.get('kind')?.value === 'regex' ? 'PATTERN.REGEX_HELP' : 'TOOLTIP.TAG_FILTER') | translate
                                     }}</span>
                                     } @if ( supportedFilters[i]?.type ===
                                     'label' ) {
                                     <span class="tooltip-content">{{
-                                        'TOOLTIP.LABEL_FILTER' | translate
+                                        (filter.get('kind')?.value === 'regex' ? 'PATTERN.REGEX_HELP' : 'TOOLTIP.LABEL_FILTER') | translate
                                     }}</span>
                                     } @if ( supportedFilters[i]?.type ===
                                     'resource' ) {
@@ -472,6 +484,9 @@
                             <label class="sub-label"
                                 >{{
                                     'REPLICATION.REPO_FLATTENING' | translate
+
+
+
                                 }}:</label
                             >
                             <select
@@ -864,7 +879,7 @@
             class="btn btn-primary"
             [clrLoading]="inProgress"
             (click)="onSubmit()"
-            [disabled]="inProgress || !isValid || !hasFormChange()">
+            [disabled]="inProgress || !isValid || hasInvalidPattern() || !hasFormChange()">
             {{ 'BUTTON.SAVE' | translate }}
         </button>
     </div>

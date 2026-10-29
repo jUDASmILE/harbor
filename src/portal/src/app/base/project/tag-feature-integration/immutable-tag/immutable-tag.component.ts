@@ -228,9 +228,9 @@ export class ImmutableTagComponent implements OnInit {
             });
     }
 
-    formatPattern(pattern: string): string {
+    formatPattern(pattern: string, kind?: string): string {
         let str: string = pattern;
-        if (/^{\S+}$/.test(str)) {
+        if (kind !== 'regex' && /^{\S+}$/.test(str)) {
             return str.slice(1, str.length - 1);
         }
         return str;

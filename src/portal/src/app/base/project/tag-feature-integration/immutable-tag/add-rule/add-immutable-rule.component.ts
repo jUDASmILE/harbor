@@ -25,6 +25,12 @@ import {
 import { ImmutableTagService } from '../immutable-tag.service';
 import { compareValue } from '../../../../../shared/units/utils';
 import { InlineAlertComponent } from '../../../../../shared/components/inline-alert/inline-alert.component';
+import {
+    encodePattern,
+    displayPattern,
+    validatePattern,
+    PATTERN_KINDS,
+} from '../../../../../shared/units/pattern.util';
 
 const EXISTING_RULE = 'TAG_RETENTION.EXISTING_RULE';
 const INVALID_RULE = 'TAG_RETENTION.INVALID_RULE';
@@ -70,41 +76,59 @@ export class AddImmutableRuleComponent {
         }
     }
 
-    set repositories(repositories) {
-        if (
-            this.rule &&
-            this.rule.scope_selectors &&
-            this.rule.scope_selectors.repository &&
-            this.rule.scope_selectors.repository[0]
-        ) {
-            if (
-                repositories.indexOf(',') !== -1 &&
-                repositories.indexOf('{') === -1 &&
-                repositories.indexOf('}') === -1
-            ) {
-                this.rule.scope_selectors.repository[0].pattern =
-                    '{' + repositories + '}';
-            } else {
-                this.rule.scope_selectors.repository[0].pattern = repositories;
-            }
-        }
+    get repoKind(): string {
+        return this.rule.scope_selectors.repository[0].kind || 'doublestar';
     }
 
-    get repositories() {
-        if (
-            this.rule &&
-            this.rule.scope_selectors &&
-            this.rule.scope_selectors.repository &&
-            this.rule.scope_selectors.repository[0] &&
-            this.rule.scope_selectors.repository[0].pattern
-        ) {
-            let str: string = this.rule.scope_selectors.repository[0].pattern;
-            if (/^{\S+}$/.test(str)) {
-                return str.slice(1, str.length - 1);
-            }
-            return str;
-        }
-        return '';
+    set repoKind(kind: string) {
+        this.rule.scope_selectors.repository[0].kind = kind;
+    }
+
+    get tagsKind(): string {
+        return this.rule.tag_selectors[0].kind || 'doublestar';
+    }
+
+    set tagsKind(kind: string) {
+        this.rule.tag_selectors[0].kind = kind;
+    }
+
+    get scopeEngines(): string[] {
+        const engines = this.metadata.scope_selectors
+            .map(s => s.kind)
+            .filter(Boolean);
+        return engines.length ? engines : PATTERN_KINDS;
+    }
+
+    get tagEngines(): string[] {
+        const engines = this.metadata.tag_selectors
+            .map(s => s.kind)
+            .filter(Boolean);
+        return engines.length ? engines : PATTERN_KINDS;
+    }
+
+    decorations(scope: boolean): string[] {
+        const metadata = scope
+            ? this.metadata.scope_selectors
+            : this.metadata.tag_selectors;
+        const kind = scope ? this.repoKind : this.tagsKind;
+        return (
+            (metadata.find(s => s.kind === kind) || metadata[0])?.decorations ||
+            []
+        );
+    }
+
+    set repositories(value: string) {
+        this.rule.scope_selectors.repository[0].pattern = encodePattern(
+            value,
+            this.repoKind
+        );
+    }
+
+    get repositories(): string {
+        return displayPattern(
+            this.rule.scope_selectors.repository[0].pattern,
+            this.repoKind
+        );
     }
 
     get tagsSelect() {
@@ -128,62 +152,40 @@ export class AddImmutableRuleComponent {
         }
     }
 
-    set tagsInput(tagsInput) {
-        if (
-            this.rule &&
-            this.rule.tag_selectors &&
-            this.rule.tag_selectors[0]
-        ) {
-            if (
-                tagsInput.indexOf(',') !== -1 &&
-                tagsInput.indexOf('{') === -1 &&
-                tagsInput.indexOf('}') === -1
-            ) {
-                this.rule.tag_selectors[0].pattern = '{' + tagsInput + '}';
-            } else {
-                this.rule.tag_selectors[0].pattern = tagsInput;
-            }
-        }
+    set tagsInput(value: string) {
+        this.rule.tag_selectors[0].pattern = encodePattern(
+            value,
+            this.tagsKind
+        );
     }
 
-    get tagsInput() {
-        if (
-            this.rule &&
-            this.rule.tag_selectors &&
-            this.rule.tag_selectors[0] &&
-            this.rule.tag_selectors[0].pattern
-        ) {
-            let str: string = this.rule.tag_selectors[0].pattern;
-            if (/^{\S+}$/.test(str)) {
-                return str.slice(1, str.length - 1);
-            }
-            return str;
-        }
-        return '';
+    get tagsInput(): string {
+        return displayPattern(
+            this.rule.tag_selectors[0].pattern,
+            this.tagsKind
+        );
     }
 
     canNotAdd(): boolean {
-        if (this.onGoing) {
+        if (
+            this.onGoing ||
+            (!this.isAdd && compareValue(this.editRuleOrigin, this.rule))
+        ) {
             return true;
         }
-        if (!this.isAdd && compareValue(this.editRuleOrigin, this.rule)) {
+        if (
+            validatePattern(this.repositories, this.repoKind) ||
+            validatePattern(this.tagsInput, this.tagsKind)
+        ) {
             return true;
         }
-        return !(
-            this.rule &&
-            this.rule.scope_selectors &&
-            this.rule.scope_selectors.repository &&
-            this.rule.scope_selectors.repository[0] &&
-            this.rule.scope_selectors.repository[0].pattern &&
-            this.rule.scope_selectors.repository[0].pattern.replace(
-                /[{}]/g,
-                ''
-            ) &&
-            this.rule.tag_selectors &&
-            this.rule.tag_selectors[0] &&
-            this.rule.tag_selectors[0].pattern &&
-            this.rule.tag_selectors[0].pattern.replace(/[{}]/g, '')
-        );
+        if (
+            (this.repoKind !== 'regex' && !this.repositories) ||
+            (this.tagsKind !== 'regex' && !this.tagsInput)
+        ) {
+            return true;
+        }
+        return false;
     }
 
     open() {
@@ -201,12 +203,17 @@ export class AddImmutableRuleComponent {
     }
 
     add() {
-        // remove whitespaces
-        this.rule.scope_selectors.repository[0].pattern =
-            this.rule.scope_selectors.repository[0].pattern.replace(/\s+/g, '');
-        this.rule.tag_selectors[0].pattern =
-            this.rule.tag_selectors[0].pattern.replace(/\s+/g, '');
+        // Preserve whitespace in regex literals and quoted expressions.
+        for (const selector of [
+            this.rule.scope_selectors.repository[0],
+            this.rule.tag_selectors[0],
+        ]) {
+            if (selector.kind !== 'regex') {
+                selector.pattern = selector.pattern.replace(/\s+/g, '');
+            }
+        }
         if (
+            this.repoKind !== 'regex' &&
             this.rule.scope_selectors.repository[0].decoration !==
                 'repoMatches' &&
             this.rule.scope_selectors.repository[0].pattern
@@ -238,6 +245,13 @@ export class AddImmutableRuleComponent {
         return false;
     }
     isSameRule(rule: ImmutableRetentionRule): boolean {
+        if (
+            this.repoKind !==
+                (rule.scope_selectors.repository[0].kind || 'doublestar') ||
+            this.tagsKind !== (rule.tag_selectors[0].kind || 'doublestar')
+        ) {
+            return false;
+        }
         if (
             this.rule.scope_selectors.repository[0].decoration !==
             rule.scope_selectors.repository[0].decoration

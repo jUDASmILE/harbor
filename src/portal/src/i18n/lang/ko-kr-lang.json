@@ -2016,5 +2016,12 @@
         "PUSH_PERMISSION_TOOLTIP": "Push 권한에는 Pull 권한도 필요합니다.",
         "NOT_FOUND": "역할을 찾을 수 없습니다!",
         "SEARCH_BY_NAME": "이름으로 검색"
+    },
+    "PATTERN": {
+        "ENGINE": "패턴 엔진",
+        "REGEX_HELP": "RE2 전체 문자열 일치. 예: v?\\d+\\.\\d+\\.\\d+. 최대 512자. 전후방 탐색과 역참조는 지원하지 않습니다.",
+        "GLOB_HELP": "Glob 일치. 예: library/** 또는 release-*. 대안은 쉼표로 구분합니다.",
+        "REGEX_INVALID": "정규식이 잘못되었거나 지원되지 않는 RE2 구문을 사용합니다.",
+        "TOO_LONG": "정규식은 512자를 초과할 수 없습니다."
     }
 }

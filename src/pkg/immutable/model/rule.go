@@ -15,7 +15,11 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/beego/beego/v2/core/validation"
+
+	"github.com/goharbor/harbor/src/lib/selector/selectors/index"
 )
 
 // Metadata of the immutable rule
@@ -65,14 +69,52 @@ func (m *Metadata) Valid(v *validation.Validation) {
 // Selector to narrow down the list
 type Selector struct {
 	// Kind of the selector
-	// "doublestar" or "label"
-	Kind string `json:"kind" valid:"Required;Match(doublestar)"`
+	// "doublestar" (the default) or "regex"
+	Kind string `json:"kind" valid:"Match(/^(doublestar|regex)?$/)"`
 
 	// Decorated the selector
-	// for "doublestar" : "matching" and "excluding"
-	// for "label" : "with" and "without"
+	// Both pattern engines support the same matching and excluding decorations.
 	Decoration string `json:"decoration" valid:"Required"`
 
 	// Param for the selector
-	Pattern string `json:"pattern" valid:"Required"`
+	Pattern string `json:"pattern"`
+}
+
+// ValidateSelectors rejects invalid selector engines, decorations and patterns before a rule is saved.
+func (m *Metadata) ValidateSelectors() error {
+	for _, s := range m.TagSelectors {
+		if err := validateSelector(s, "tags", "matches", "excludes"); err != nil {
+			return err
+		}
+	}
+	for scope, selectors := range m.ScopeSelectors {
+		var matches, excludes string
+		switch scope {
+		case "repository":
+			matches, excludes = "repoMatches", "repoExcludes"
+		case "namespace":
+			matches, excludes = "nsMatches", "nsExcludes"
+		default:
+			return fmt.Errorf("unsupported selector scope %q", scope)
+		}
+		for _, s := range selectors {
+			if err := validateSelector(s, scope, matches, excludes); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateSelector(s *Selector, field, matches, excludes string) error {
+	if s == nil {
+		return fmt.Errorf("%s selector must not be null", field)
+	}
+	if s.Decoration != matches && s.Decoration != excludes {
+		return fmt.Errorf("invalid %s selector decoration %q", field, s.Decoration)
+	}
+	if _, err := index.Get(s.Kind, s.Decoration, s.Pattern, ""); err != nil {
+		return fmt.Errorf("invalid %s selector: %w", field, err)
+	}
+	return nil
 }

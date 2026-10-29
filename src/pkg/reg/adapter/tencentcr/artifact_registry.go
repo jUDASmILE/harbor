@@ -53,9 +53,13 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) (resources []*model.Re
 	var namespacePattern, repoPattern, tagsPattern = filterToPatterns(filters)
 	log.Debugf("[tencent-tcr.FetchArtifacts] namespacePattern=%s repoPattern=%s tagsPattern=%s", namespacePattern, repoPattern, tagsPattern)
 
+	tagMatcher, compileErr := util.Compile(tagsPattern, util.FilterKind(filters, model.FilterTypeTag))
+	if compileErr != nil {
+		return nil, compileErr
+	}
 	// 1. list namespaces
 	var namespaces []string
-	namespaces, err = a.listCandidateNamespaces(namespacePattern)
+	namespaces, err = a.listCandidateNamespaces(strings.Split(util.ListingPattern(repoPattern, util.FilterKind(filters, model.FilterTypeName)), "/")[0])
 	if err != nil {
 		return
 	}
@@ -80,7 +84,10 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) (resources []*model.Re
 			})
 		}
 	}
-	repos, _ = filter.DoFilterRepositories(repositories, filters)
+	repos, err = filter.DoFilterRepositories(repositories, filters)
+	if err != nil {
+		return nil, err
+	}
 	log.Debugf("[tencent-tcr.FetchArtifacts] filteredRepos=%d", len(repos))
 
 	// 4. list images
@@ -101,19 +108,20 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) (resources []*model.Re
 			}
 
 			var filteredImages []string
-			if tagsPattern != "" {
-				for _, image := range images {
-					var ok bool
-					ok, err = util.Match(tagsPattern, image)
-					if err != nil {
-						return fmt.Errorf("[tencent-tcr.FetchArtifacts.matchImage] image='%s', error=%v", image, err)
-					}
-					if ok {
-						filteredImages = append(filteredImages, image)
+			for _, image := range images {
+				matched := tagMatcher.MatchString(image)
+				// Preserve legacy adapters' glob decoration handling; regex follows the selector decoration.
+				if tagsPattern != "" && util.FilterKind(filters, model.FilterTypeTag) == "regex" {
+					for _, f := range filters {
+						if f.Type == model.FilterTypeTag && f.Decoration == model.Excludes {
+							matched = !matched
+							break
+						}
 					}
 				}
-			} else {
-				filteredImages = images
+				if matched {
+					filteredImages = append(filteredImages, image)
+				}
 			}
 
 			log.Debugf("[tencent-tcr.FetchArtifacts] repo=%s, images=%v, filteredImages=%v", repo.Name, images, filteredImages)

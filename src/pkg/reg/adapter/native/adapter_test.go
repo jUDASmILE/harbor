@@ -359,3 +359,21 @@ func Test_native_FetchArtifacts(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeRegexRepositoryAndTagFilters(t *testing.T) {
+	server := mockNativeRegistry()
+	defer server.Close()
+	adapter := NewAdapter(&model.Registry{URL: server.URL, Insecure: true})
+	resources, err := adapter.FetchArtifacts([]*model.Filter{
+		{Type: model.FilterTypeName, Kind: "regex", Value: `test/(a1|b2)`},
+		{Type: model.FilterTypeTag, Kind: "regex", Value: `tag\d{2}`},
+	})
+	assert.NoError(t, err)
+	if !assert.Len(t, resources, 2) {
+		return
+	}
+	assert.Equal(t, "test/a1", resources[0].Metadata.Repository.Name)
+	assert.Len(t, resources[0].Metadata.Artifacts, 1)
+	assert.Equal(t, "test/b2", resources[1].Metadata.Repository.Name)
+	assert.Len(t, resources[1].Metadata.Artifacts, 2)
+}

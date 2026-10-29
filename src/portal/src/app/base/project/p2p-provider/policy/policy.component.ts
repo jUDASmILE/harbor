@@ -480,6 +480,9 @@ export class PolicyComponent implements OnInit, OnDestroy {
 
     editPolicy() {
         if (this.selectedRow) {
+            this.addP2pPolicyComponent.reposKind = 'doublestar';
+            this.addP2pPolicyComponent.tagsKind = 'doublestar';
+            this.addP2pPolicyComponent.labelsKind = 'doublestar';
             this.addP2pPolicyComponent.repos = null;
             this.addP2pPolicyComponent.tags = null;
             this.addP2pPolicyComponent.labels = null;
@@ -491,25 +494,40 @@ export class PolicyComponent implements OnInit, OnDestroy {
             const filter: any[] = JSON.parse(this.selectedRow.filters);
             if (filter && filter.length) {
                 filter.forEach(item => {
-                    if (item.type === FILTER_TYPE.REPOS && item.value) {
+                    if (
+                        item.type === FILTER_TYPE.REPOS &&
+                        (item.value || item.kind === 'regex')
+                    ) {
                         let str: string = item.value;
-                        if (/^{\S+}$/.test(str)) {
+                        if (item.kind !== 'regex' && /^{\S+}$/.test(str)) {
                             str = str.slice(1, str.length - 1);
                         }
+                        this.addP2pPolicyComponent.reposKind =
+                            item.kind || 'doublestar';
                         this.addP2pPolicyComponent.repos = str;
                     }
-                    if (item.type === FILTER_TYPE.TAG && item.value) {
+                    if (
+                        item.type === FILTER_TYPE.TAG &&
+                        (item.value || item.kind === 'regex')
+                    ) {
                         let str: string = item.value;
-                        if (/^{\S+}$/.test(str)) {
+                        if (item.kind !== 'regex' && /^{\S+}$/.test(str)) {
                             str = str.slice(1, str.length - 1);
                         }
+                        this.addP2pPolicyComponent.tagsKind =
+                            item.kind || 'doublestar';
                         this.addP2pPolicyComponent.tags = str;
                     }
-                    if (item.type === FILTER_TYPE.LABEL && item.value) {
+                    if (
+                        item.type === FILTER_TYPE.LABEL &&
+                        (item.value || item.kind === 'regex')
+                    ) {
                         let str: string = item.value;
-                        if (/^{\S+}$/.test(str)) {
+                        if (item.kind !== 'regex' && /^{\S+}$/.test(str)) {
                             str = str.slice(1, str.length - 1);
                         }
+                        this.addP2pPolicyComponent.labelsKind =
+                            item.kind || 'doublestar';
                         this.addP2pPolicyComponent.labels = str;
                     }
                 });
@@ -526,6 +544,11 @@ export class PolicyComponent implements OnInit, OnDestroy {
                 this.addP2pPolicyComponent.scope = scope;
                 this.addP2pPolicyComponent.clusterIDs = cluster_ids.join(',');
             }
+            this.addP2pPolicyComponent.originKindsForEdit = [
+                this.addP2pPolicyComponent.reposKind,
+                this.addP2pPolicyComponent.tagsKind,
+                this.addP2pPolicyComponent.labelsKind,
+            ];
             this.addP2pPolicyComponent.currentForm.reset({
                 provider: this.addP2pPolicyComponent.policy.provider_id,
                 name: this.addP2pPolicyComponent.policy.name,
@@ -747,7 +770,7 @@ export class PolicyComponent implements OnInit, OnDestroy {
             for (let i = 0; i < arr.length; i++) {
                 if (arr[i].type === type && arr[i].value) {
                     let str: string = arr[i].value;
-                    if (/^{\S+}$/.test(str)) {
+                    if (arr[i].kind !== 'regex' && /^{\S+}$/.test(str)) {
                         return str.slice(1, str.length - 1);
                     }
                     return str;

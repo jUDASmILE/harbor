@@ -106,12 +106,19 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 			tagsPattern = filter.Value.(string)
 		}
 	}
-	namespacePattern := strings.Split(repoPattern, "/")[0]
+	nameMatcher, err := util.Compile(repoPattern, util.FilterKind(filters, model.FilterTypeName))
+	if err != nil {
+		return nil, err
+	}
+	tagMatcher, err := util.Compile(tagsPattern, util.FilterKind(filters, model.FilterTypeTag))
+	if err != nil {
+		return nil, err
+	}
 
 	log.Debug("read in filter patterns", "repoPattern", repoPattern, "tagsPattern", tagsPattern)
 
 	// 2. list namespace candidtes
-	namespaces, err := a.listCandidateNamespaces(namespacePattern)
+	namespaces, err := a.listCandidateNamespaces(strings.Split(util.ListingPattern(repoPattern, util.FilterKind(filters, model.FilterTypeName)), "/")[0])
 	if err != nil {
 		log.Errorf("FetchArtifacts error: %v", err)
 		return nil, err
@@ -129,11 +136,7 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 		log.Debug(" FetchArtifacts list repo", "repos: ", repoCandidates)
 		for _, r := range repoCandidates {
 			nsRepoCandidate := fmt.Sprintf("%s/%s", ns, r)
-			ok, err := util.Match(repoPattern, nsRepoCandidate)
-			if err != nil {
-				log.Error("FetchArtifacts error", "error", err)
-				return nil, err
-			}
+			ok := nameMatcher.MatchString(nsRepoCandidate)
 			log.Debug("filter namespaced repository", "repoPattern: ", repoPattern, "repo: ", nsRepoCandidate)
 			if ok {
 				nsRepos = append(nsRepos, nsRepoCandidate)
@@ -159,19 +162,21 @@ func (a *adapter) FetchArtifacts(filters []*model.Filter) ([]*model.Resource, er
 				return fmt.Errorf("volcengineCR fail to list all tags %w", err)
 			}
 
-			tags := make([]string, 0)
-			if tagsPattern != "" {
-				for _, candidateTag := range candidateTags {
-					ok, err := util.Match(tagsPattern, candidateTag)
-					if err != nil {
-						return fmt.Errorf("fail to match tag pattern, error=%w", err)
-					}
-					if ok {
-						tags = append(tags, candidateTag)
+			var tags []string
+			for _, tag := range candidateTags {
+				matched := tagMatcher.MatchString(tag)
+				// Preserve legacy adapters' glob decoration handling; regex follows the selector decoration.
+				if tagsPattern != "" && util.FilterKind(filters, model.FilterTypeTag) == "regex" {
+					for _, f := range filters {
+						if f.Type == model.FilterTypeTag && f.Decoration == model.Excludes {
+							matched = !matched
+							break
+						}
 					}
 				}
-			} else {
-				tags = candidateTags
+				if matched {
+					tags = append(tags, tag)
+				}
 			}
 
 			log.Debug("filter tags")

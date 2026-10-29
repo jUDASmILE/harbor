@@ -107,6 +107,14 @@ func (c *controllerTestSuite) SetupTest() {
 	}
 }
 
+func (c *controllerTestSuite) TestAssembleArtifactPropagatesImmutabilityFailure() {
+	failure := errors.New("immutability evaluation failed")
+	c.tagCtl.On("List").Return(nil, failure)
+	assembled, err := c.ctl.assembleArtifact(lib.WithAPIVersion(nil, "2.0"), &artifact.Artifact{ID: 1}, &Option{WithTag: true, TagOption: &tag.Option{WithImmutableStatus: true}})
+	c.Require().ErrorIs(err, failure)
+	c.Nil(assembled)
+}
+
 func (c *controllerTestSuite) TestAssembleArtifact() {
 	art := &artifact.Artifact{
 		ID:             1,
@@ -151,7 +159,8 @@ func (c *controllerTestSuite) TestAssembleArtifact() {
 	c.accMgr.On("List", mock.Anything, mock.Anything).Return([]accessorymodel.Accessory{
 		acc,
 	}, nil)
-	artifact := c.ctl.assembleArtifact(ctx, art, option)
+	artifact, err := c.ctl.assembleArtifact(ctx, art, option)
+	c.Require().NoError(err)
 	c.Require().NotNil(artifact)
 	c.Equal(art.ID, artifact.ID)
 	c.Equal(icon.DigestOfIconDefault, artifact.Icon)

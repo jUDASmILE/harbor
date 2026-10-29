@@ -2018,5 +2018,12 @@
         "PUSH_PERMISSION_TOOLTIP": "La permission push nécessite également la permission pull.",
         "NOT_FOUND": "Nous n'avons trouvé aucun rôle!",
         "SEARCH_BY_NAME": "Chercher par nom"
+    },
+    "PATTERN": {
+        "ENGINE": "Moteur de motifs",
+        "REGEX_HELP": "Correspondance RE2 de toute la chaîne, par exemple v?\\d+\\.\\d+\\.\\d+. Maximum 512 caractères. Les assertions et références arrière ne sont pas prises en charge.",
+        "GLOB_HELP": "Correspondance glob, par exemple library/** ou release-*. Séparez les alternatives par des virgules.",
+        "REGEX_INVALID": "Expression régulière invalide ou syntaxe non prise en charge par RE2.",
+        "TOO_LONG": "L’expression régulière ne doit pas dépasser 512 caractères."
     }
 }

@@ -2034,5 +2034,12 @@
         "PUSH_PERMISSION_TOOLTIP": "推送權限同時需要拉取權限。",
         "NOT_FOUND": "找不到任何角色！",
         "SEARCH_BY_NAME": "依名稱搜尋"
+    },
+    "PATTERN": {
+        "ENGINE": "比對引擎",
+        "REGEX_HELP": "RE2 全字串比對，例如 v?\\d+\\.\\d+\\.\\d+。最多 512 個字元，不支援環視和反向引用。",
+        "GLOB_HELP": "Glob 比對，例如 library/** 或 release-*。多個選項以逗號分隔。",
+        "REGEX_INVALID": "正規表示式無效或使用了 RE2 不支援的語法。",
+        "TOO_LONG": "正規表示式不能超過 512 個字元。"
     }
 }

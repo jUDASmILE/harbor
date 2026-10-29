@@ -16,11 +16,13 @@ package index
 
 import (
 	"slices"
+	"sort"
 	"sync"
 
 	"github.com/goharbor/harbor/src/lib/errors"
 	"github.com/goharbor/harbor/src/lib/selector"
 	"github.com/goharbor/harbor/src/lib/selector/selectors/doublestar"
+	"github.com/goharbor/harbor/src/lib/selector/selectors/regexp"
 )
 
 func init() {
@@ -32,7 +34,9 @@ func init() {
 		doublestar.RepoExcludes,
 		doublestar.NSMatches,
 		doublestar.NSExcludes,
-	}, doublestar.New)
+	}, doublestar.NewValidated)
+
+	Register(regexp.Kind, []string{doublestar.Matches, doublestar.Excludes, doublestar.RepoMatches, doublestar.RepoExcludes, doublestar.NSMatches, doublestar.NSExcludes}, regexp.New)
 
 	// Register label selector
 	// Register(label.Kind, []string{label.With, label.Without}, label.New)
@@ -71,7 +75,10 @@ func Register(kind string, decorations []string, factory selector.Factory) {
 
 // Get selector with the provided kind and decoration
 func Get(kind, decoration, pattern, extras string) (selector.Selector, error) {
-	if len(kind) == 0 || len(decoration) == 0 {
+	if kind == "" {
+		kind = doublestar.Kind
+	}
+	if len(decoration) == 0 {
 		return nil, errors.New("empty selector kind or decoration")
 	}
 
@@ -83,7 +90,7 @@ func Get(kind, decoration, pattern, extras string) (selector.Selector, error) {
 	item := v.(*indexedItem)
 	if slices.Contains(item.Meta.Decorations, decoration) {
 		factory := item.Factory
-		return factory(decoration, pattern, extras), nil
+		return factory(decoration, pattern, extras)
 	}
 
 	return nil, errors.Errorf("decoration %s of selector %s is not supported", decoration, kind)
@@ -102,5 +109,6 @@ func Index() []*IndexedMeta {
 		return false
 	})
 
+	sort.Slice(all, func(i, j int) bool { return all[i].Kind < all[j].Kind })
 	return all
 }

@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/goharbor/harbor/src/lib/pattern"
 	"github.com/goharbor/harbor/src/pkg/reg/model"
-	"github.com/goharbor/harbor/src/pkg/reg/util"
 )
 
 // DoFilterArtifacts filter the artifacts according to the filters
@@ -39,17 +39,30 @@ func BuildArtifactFilters(filters []*model.Filter) (ArtifactFilters, error) {
 		switch filter.Type {
 		case model.FilterTypeLabel:
 			if labels, ok := filter.Value.([]string); ok {
-				f = &artifactLabelFilter{
-					labels:     labels,
-					decoration: filter.Decoration,
+				labelFilter := &artifactLabelFilter{labels: labels, decoration: filter.Decoration}
+				if filter.Kind == pattern.KindRegex {
+					for _, expression := range labels {
+						matcher, err := pattern.Compile(expression, filter.Kind)
+						if err != nil {
+							return nil, err
+						}
+						labelFilter.matchers = append(labelFilter.matchers, matcher)
+					}
 				}
+				f = labelFilter
 			} else {
 				return nil, fmt.Errorf("invalid filter value type for label filter, expecting []string")
 			}
 		case model.FilterTypeTag:
-			if pattern, ok := filter.Value.(string); ok {
+			if expression, ok := filter.Value.(string); ok {
+				matcher, err := pattern.Compile(expression, filter.Kind)
+				if err != nil {
+					return nil, err
+				}
 				f = &artifactTagFilter{
-					pattern:    pattern,
+					matcher:    matcher,
+					kind:       filter.Kind,
+					pattern:    expression,
 					decoration: filter.Decoration,
 				}
 			} else {
@@ -123,7 +136,8 @@ func (a *artifactTypeFilter) Filter(artifacts []*model.Artifact) ([]*model.Artif
 // filter the artifacts according to the labels. Only the artifact contains all labels defined
 // in the filter is the valid one
 type artifactLabelFilter struct {
-	labels []string
+	matchers []*pattern.Matcher
+	labels   []string
 	// "matches", "excludes"
 	decoration string
 }
@@ -139,10 +153,30 @@ func (a *artifactLabelFilter) Filter(artifacts []*model.Artifact) ([]*model.Arti
 			labels[label] = struct{}{}
 		}
 		match := true
-		for _, label := range a.labels {
-			if _, exist := labels[label]; !exist {
-				match = false
-				break
+		if a.matchers != nil {
+			for i, matcher := range a.matchers {
+				// An empty regex imposes no label constraint.
+				if a.labels[i] == "" {
+					continue
+				}
+				found := false
+				for _, label := range artifact.Labels {
+					if matcher.MatchString(label) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					match = false
+					break
+				}
+			}
+		} else {
+			for _, label := range a.labels {
+				if _, exist := labels[label]; !exist {
+					match = false
+					break
+				}
 			}
 		}
 		// add the artifact to the result list if it contains all labels defined for the filter
@@ -176,6 +210,8 @@ func (a *artifactTaggedFilter) Filter(artifacts []*model.Artifact) ([]*model.Art
 }
 
 type artifactTagFilter struct {
+	matcher *pattern.Matcher
+	kind    string
 	pattern string
 	// "matches", "excludes"
 	decoration string
@@ -184,6 +220,13 @@ type artifactTagFilter struct {
 func (a *artifactTagFilter) Filter(artifacts []*model.Artifact) ([]*model.Artifact, error) {
 	if len(a.pattern) == 0 {
 		return artifacts, nil
+	}
+	if a.matcher == nil {
+		matcher, err := pattern.Compile(a.pattern, a.kind)
+		if err != nil {
+			return nil, err
+		}
+		a.matcher = matcher
 	}
 	var result []*model.Artifact
 	for _, artifact := range artifacts {
@@ -198,9 +241,9 @@ func (a *artifactTagFilter) Filter(artifacts []*model.Artifact) ([]*model.Artifa
 
 		// untagged artifact
 		if len(tagsForMatching) == 0 {
-			match, err := util.Match(a.pattern, "")
-			if err != nil {
-				return nil, err
+			match := false
+			if a.kind != pattern.KindRegex {
+				match = a.matcher.MatchString("")
 			}
 			if a.decoration == model.Excludes {
 				if !match {
@@ -217,10 +260,7 @@ func (a *artifactTagFilter) Filter(artifacts []*model.Artifact) ([]*model.Artifa
 		// tagged artifact
 		var tags []string
 		for _, tag := range tagsForMatching {
-			match, err := util.Match(a.pattern, tag)
-			if err != nil {
-				return nil, err
-			}
+			match := a.matcher.MatchString(tag)
 			if a.decoration == model.Excludes {
 				if !match {
 					tags = append(tags, tag)

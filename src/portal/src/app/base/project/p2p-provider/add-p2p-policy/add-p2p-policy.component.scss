@@ -107,3 +107,9 @@
 .font-size-12 {
   font-size: 12px;
 }
+
+
+.clr-input-wrapper:has(hbr-pattern-engine) {
+  height: auto;
+  flex-wrap: wrap;
+}

@@ -20,8 +20,10 @@ import (
 
 	"github.com/goharbor/harbor/src/lib/errors"
 	"github.com/goharbor/harbor/src/lib/log"
+	"github.com/goharbor/harbor/src/lib/pattern"
 	"github.com/goharbor/harbor/src/lib/selector"
 	"github.com/goharbor/harbor/src/lib/selector/selectors/doublestar"
+	"github.com/goharbor/harbor/src/lib/selector/selectors/index"
 	"github.com/goharbor/harbor/src/lib/selector/selectors/label"
 	"github.com/goharbor/harbor/src/lib/selector/selectors/severity"
 	"github.com/goharbor/harbor/src/lib/selector/selectors/signature"
@@ -50,13 +52,13 @@ func NewFilter() Filter {
 
 // Filter candidates
 func (df *defaultFilter) Filter(candidates []*selector.Candidate) ([]*selector.Candidate, error) {
-	if len(df.selectors) == 0 {
-		return nil, errors.New("no underlying filters")
-	}
-
 	if df.error != nil {
 		// Internal error occurred
 		return nil, df.error
+	}
+
+	if len(df.selectors) == 0 {
+		return nil, errors.New("no underlying filters")
 	}
 
 	var (
@@ -88,6 +90,8 @@ func (df *defaultFilter) Filter(candidates []*selector.Candidate) ([]*selector.C
 
 // BuildFrom builds filter from the given policy schema
 func (df *defaultFilter) BuildFrom(pl *policy.Schema) Filter {
+	df.error = nil
+	df.selectors = nil
 	if pl != nil && len(pl.Filters) > 0 {
 		filters := make([]*policy.Filter, 0)
 		// Copy filters and sort the filter list
@@ -146,6 +150,10 @@ func buildFilter(f *policy.Filter) (selector.Selector, error) {
 		return nil, errors.New("nil policy filter object")
 	}
 
+	if err := f.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Value should not be nil as all the following filters need pattern data,
 	// even the pattern is empty string or zero int (not nil object).
 	if f.Value == nil {
@@ -176,10 +184,17 @@ func buildFilter(f *policy.Filter) (selector.Selector, error) {
 	// Build selectors
 	switch f.Type {
 	case policy.FilterTypeRepository:
-		return doublestar.New(doublestar.RepoMatches, f.Value, ""), nil
+		return index.Get(f.Kind, doublestar.RepoMatches, f.Value.(string), "")
 	case policy.FilterTypeTag:
-		return doublestar.New(doublestar.Matches, f.Value, ""), nil
+		return index.Get(f.Kind, doublestar.Matches, f.Value.(string), "")
 	case policy.FilterTypeLabel:
+		if f.Kind == pattern.KindRegex {
+			matcher, err := pattern.Compile(f.Value.(string), f.Kind)
+			if err != nil {
+				return nil, err
+			}
+			return &labelPatternSelector{matcher: matcher, all: f.Value.(string) == ""}, nil
+		}
 		return label.New(label.With, f.Value, ""), nil
 	case policy.FilterTypeSignature:
 		return signature.New(signature.All, f.Value, ""), nil
@@ -188,4 +203,27 @@ func buildFilter(f *policy.Filter) (selector.Selector, error) {
 	default:
 		return nil, errors.Errorf("unknown filter type: %s", f.Type)
 	}
+}
+
+// labelPatternSelector matches label names while preserving the legacy exact-list selector.
+type labelPatternSelector struct {
+	matcher *pattern.Matcher
+	all     bool
+}
+
+func (s *labelPatternSelector) Select(candidates []*selector.Candidate) ([]*selector.Candidate, error) {
+	var selected []*selector.Candidate
+	for _, candidate := range candidates {
+		if s.all {
+			selected = append(selected, candidate)
+			continue
+		}
+		for _, label := range candidate.Labels {
+			if s.matcher.MatchString(label) {
+				selected = append(selected, candidate)
+				break
+			}
+		}
+	}
+	return selected, nil
 }

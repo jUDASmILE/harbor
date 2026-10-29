@@ -191,3 +191,23 @@ func TestIsSpecificPath(t *testing.T) {
 		}
 	}
 }
+
+func TestRegexListingPatterns(t *testing.T) {
+	for _, tt := range []struct{ expression, want string }{
+		{`library/app\d+`, "library/**"},
+		{`(?:library|other)/app`, ""},
+		{`(?i)library/app`, ""},
+		{`^library/app$`, "library/**"},
+	} {
+		actual := ListingPattern(tt.expression, "regex")
+		if actual != tt.want {
+			t.Errorf("ListingPattern(%q)=%q, want %q", tt.expression, actual, tt.want)
+		}
+	}
+	if paths, ok := SpecificPaths(`library/app.+`, "regex"); ok {
+		t.Fatalf("regex must not be interpreted as an exact glob: %v", paths)
+	}
+	if paths, ok := SpecificPaths(`library/app`, "regex"); !ok || len(paths) != 1 || paths[0] != "library/app" {
+		t.Fatalf("literal regex optimization failed: %v %t", paths, ok)
+	}
+}

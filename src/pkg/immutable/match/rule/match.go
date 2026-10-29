@@ -16,6 +16,7 @@ package rule
 
 import (
 	"context"
+	"sync"
 
 	"github.com/goharbor/harbor/src/controller/immutable"
 	"github.com/goharbor/harbor/src/lib/q"
@@ -28,16 +29,18 @@ import (
 
 // Matcher ...
 type Matcher struct {
-	rules []*model.Metadata
+	mutex     sync.Mutex
+	selectors map[selectorKey]iselector.Selector
 }
 
 // Match ...
 func (rm *Matcher) Match(ctx context.Context, pid int64, c iselector.Candidate) (bool, error) {
-	if err := rm.getImmutableRules(ctx, pid); err != nil {
+	rules, err := immutable.Ctr.ListImmutableRules(ctx, q.New(q.KeyWords{"ProjectID": pid}))
+	if err != nil {
 		return false, err
 	}
 
-	for _, r := range rm.rules {
+	for _, r := range rules {
 		if r.Disabled {
 			continue
 		}
@@ -48,7 +51,7 @@ func (rm *Matcher) Match(ctx context.Context, pid int64, c iselector.Candidate) 
 		if len(repositorySelectors) < 1 {
 			continue
 		}
-		matched, err := dimensionSelects(repositorySelectors, "", &c)
+		matched, err := dimensionSelects(repositorySelectors, "", &c, rm.getSelector)
 		if err != nil {
 			return false, err
 		}
@@ -62,7 +65,7 @@ func (rm *Matcher) Match(ctx context.Context, pid int64, c iselector.Candidate) 
 		if len(tagSelectors) < 1 {
 			continue
 		}
-		matched, err = dimensionSelects(tagSelectors, "{\"untagged\": false}", &c)
+		matched, err = dimensionSelects(tagSelectors, "{\"untagged\": false}", &c, rm.getSelector)
 		if err != nil {
 			return false, err
 		}
@@ -85,14 +88,14 @@ func (rm *Matcher) Match(ctx context.Context, pid int64, c iselector.Candidate) 
 // A multi-tag candidate is evaluated per tag because a doublestar selector
 // selects an artifact when any single tag passes; combining selector results on
 // the whole artifact would let tags excluded by different selectors cancel out.
-func dimensionSelects(selectors []*model.Selector, extras string, c *iselector.Candidate) (bool, error) {
+func dimensionSelects(selectors []*model.Selector, extras string, c *iselector.Candidate, get selectorGetter) (bool, error) {
 	if len(c.Tags) <= 1 {
-		return selectsOne(selectors, extras, c)
+		return selectsOne(selectors, extras, c, get)
 	}
 	for _, tag := range c.Tags {
 		single := *c
 		single.Tags = []string{tag}
-		ok, err := selectsOne(selectors, extras, &single)
+		ok, err := selectsOne(selectors, extras, &single, get)
 		if err != nil || ok {
 			return ok, err
 		}
@@ -100,10 +103,10 @@ func dimensionSelects(selectors []*model.Selector, extras string, c *iselector.C
 	return false, nil
 }
 
-func selectsOne(selectors []*model.Selector, extras string, c *iselector.Candidate) (bool, error) {
+func selectsOne(selectors []*model.Selector, extras string, c *iselector.Candidate, get selectorGetter) (bool, error) {
 	hasInclusion, included := false, false
 	for _, sel := range selectors {
-		s, err := index.Get(sel.Kind, sel.Decoration, sel.Pattern, extras)
+		s, err := get(sel.Kind, sel.Decoration, sel.Pattern, extras)
 		if err != nil {
 			return false, err
 		}
@@ -123,8 +126,7 @@ func selectsOne(selectors []*model.Selector, extras string, c *iselector.Candida
 	return !hasInclusion || included, nil
 }
 
-// nonNil drops null entries, which the API accepts without validation and which
-// were harmless while only the first selector was read.
+// nonNil tolerates null selector entries persisted by older Harbor versions.
 func nonNil(selectors []*model.Selector) []*model.Selector {
 	out := make([]*model.Selector, 0, len(selectors))
 	for _, s := range selectors {
@@ -143,13 +145,31 @@ func isExclusion(decoration string) bool {
 	return false
 }
 
-func (rm *Matcher) getImmutableRules(ctx context.Context, pid int64) error {
-	rules, err := immutable.Ctr.ListImmutableRules(ctx, q.New(q.KeyWords{"ProjectID": pid}))
-	if err != nil {
-		return err
+type selectorGetter func(kind, decoration, pattern, extras string) (iselector.Selector, error)
+
+type selectorKey struct {
+	kind, decoration, pattern, extras string
+}
+
+// Cache immutable selector instances across artifact evaluations. The current
+// policy is read for each request, so policy edits take effect immediately.
+func (rm *Matcher) getSelector(kind, decoration, pattern, extras string) (iselector.Selector, error) {
+	key := selectorKey{kind, decoration, pattern, extras}
+	rm.mutex.Lock()
+	defer rm.mutex.Unlock()
+	if selected, ok := rm.selectors[key]; ok {
+		return selected, nil
 	}
-	rm.rules = rules
-	return nil
+	selected, err := index.Get(kind, decoration, pattern, extras)
+	if err != nil {
+		return nil, err
+	}
+	// Bound memory when policies change repeatedly or many projects are used.
+	if rm.selectors == nil || len(rm.selectors) >= 1024 {
+		rm.selectors = make(map[selectorKey]iselector.Selector)
+	}
+	rm.selectors[key] = selected
+	return selected, nil
 }
 
 // NewRuleMatcher ...

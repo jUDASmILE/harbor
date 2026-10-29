@@ -15,6 +15,9 @@
 package policy
 
 import (
+	"github.com/goharbor/harbor/src/lib/errors"
+	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -133,4 +136,30 @@ func (p *PolicyTestSuite) TestEncode() {
 	p.Equal(`[{"type":"repository","value":"**"},{"type":"tag","value":"**"},{"type":"label","value":"test"}]`, s.FiltersStr)
 	p.Equal(`{"type":"event_based","trigger_setting":{}}`, s.TriggerStr)
 	p.Equal(`{"key":"value"}`, s.ExtraAttrsStr)
+}
+
+func TestValidatePatternFilters(t *testing.T) {
+	for _, tc := range []struct {
+		kind, value string
+		invalid     bool
+	}{
+		{"", "library/**", false}, {"regex", `v\d+\.\d+\.\d+`, false},
+		{"regex", "[", true}, {"regex", `(?=foo)`, true},
+		{"unknown", "", true}, {"doublestar", "[", true},
+		{"regex", strings.Repeat("a", 513), true},
+	} {
+		s := &Schema{Filters: []*Filter{{Type: FilterTypeTag, Kind: tc.kind, Value: tc.value}}}
+		err := s.ValidatePreheatPolicy()
+		if tc.invalid {
+			require.Error(t, err)
+			require.True(t, errors.IsErr(err, errors.BadRequestCode))
+		} else {
+			require.NoError(t, err)
+		}
+	}
+	original := &Schema{Filters: []*Filter{{Type: FilterTypeTag, Kind: "regex", Value: `a{2,3}|b`}}}
+	require.NoError(t, original.Encode())
+	decoded := &Schema{FiltersStr: original.FiltersStr, TriggerStr: `{"type":"manual"}`}
+	require.NoError(t, decoded.Decode())
+	require.Equal(t, original.Filters, decoded.Filters)
 }

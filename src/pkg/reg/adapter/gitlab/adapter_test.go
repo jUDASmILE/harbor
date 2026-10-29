@@ -132,3 +132,37 @@ func TestFetchImages(t *testing.T) {
 	require.Equal(t, 1, len(resources))
 	require.Equal(t, 2, len(resources[0].Metadata.Vtags))
 }
+
+func TestGitlabRegexFilters(t *testing.T) {
+	client := getAdapter(t).(*adapter)
+	resources, err := client.FetchArtifacts([]*model.Filter{
+		{Type: model.FilterTypeName, Kind: "regex", Value: `library/(dockers)`},
+		{Type: model.FilterTypeTag, Kind: "regex", Value: `latest|v2`},
+	})
+	require.NoError(t, err)
+	require.Len(t, resources, 1)
+	require.Len(t, resources[0].Metadata.Vtags, 2)
+	resources, err = client.FetchArtifacts([]*model.Filter{
+		{Type: model.FilterTypeName, Kind: "regex", Value: `LIBRARY/(dockers)`},
+	})
+	require.NoError(t, err)
+	require.Empty(t, resources, "regex matching must be case-sensitive by default")
+}
+
+func TestGitlabRegexExclusionPreservesLegacyGlobBehavior(t *testing.T) {
+	client := getAdapter(t).(*adapter)
+	for _, tt := range []struct {
+		kind string
+		want []string
+	}{
+		{"", []string{"v2"}}, {"doublestar", []string{"v2"}}, {"regex", []string{"harbor", "latest"}},
+	} {
+		resources, err := client.FetchArtifacts([]*model.Filter{
+			{Type: model.FilterTypeName, Value: "library/dockers"},
+			{Type: model.FilterTypeTag, Kind: tt.kind, Value: "v2", Decoration: model.Excludes},
+		})
+		require.NoError(t, err)
+		require.Len(t, resources, 1)
+		require.Equal(t, tt.want, resources[0].Metadata.Vtags, tt.kind)
+	}
+}

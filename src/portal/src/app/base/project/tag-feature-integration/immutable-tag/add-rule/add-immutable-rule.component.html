@@ -12,7 +12,7 @@
         {{ 'IMMUTABLE_TAG.EDIT_TITLE' | translate }}
     </h3>
     }
-    <div class="modal-body no-scrolling">
+    <div class="modal-body">
         <inline-alert class="modal-title"></inline-alert>
         <p class="color-97">{{ 'IMMUTABLE_TAG.ADD_SUBTITLE' | translate }}</p>
         <div class="height-72">
@@ -28,8 +28,7 @@
                             id="scope_selectors"
                             [(ngModel)]="repoSelect"
                             class="clr-select w-100">
-                            @for ( d of metadata?.scope_selectors[0]
-                            ?.decorations ; track d) {
+                            @for ( d of decorations(true) ; track d) {
                             <option value="{{ d }}">
                                 {{ getI18nKey(d) | translate }}
                             </option>
@@ -39,6 +38,11 @@
                 </div>
                 <div class="clr-col-5">
                     <div class="w-100">
+                        <hbr-pattern-engine
+                            [serverError]="inlineAlert?.errorMessage"
+                            [(kind)]="repoKind"
+                            [pattern]="repositories"
+                            [engines]="scopeEngines"></hbr-pattern-engine>
                         <input
                             required
                             id="scope-input"
@@ -50,7 +54,9 @@
             <div class="clr-row">
                 <div class="clr-col-4"></div>
                 <div class="clr-col-8">
-                    <span>{{ 'IMMUTABLE_TAG.REP_SEPARATOR' | translate }}</span>
+                    <span
+                        >{{ (repoKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'IMMUTABLE_TAG.REP_SEPARATOR') | translate }}</span
+                    >
                 </div>
             </div>
         </div>
@@ -65,8 +71,7 @@
                             id="tag_selectors"
                             [(ngModel)]="tagsSelect"
                             class="clr-select w-100">
-                            @for ( d of metadata?.tag_selectors[0] ?.decorations
-                            ; track d) {
+                            @for ( d of decorations(false) ; track d) {
                             <option value="{{ d }}">
                                 {{ getI18nKey(d) | translate }}
                             </option>
@@ -76,6 +81,11 @@
                 </div>
                 <div class="clr-col-5">
                     <div class="w-100">
+                        <hbr-pattern-engine
+                            [serverError]="inlineAlert?.errorMessage"
+                            [(kind)]="tagsKind"
+                            [pattern]="tagsInput"
+                            [engines]="tagEngines"></hbr-pattern-engine>
                         <input
                             required
                             id="tag-input"
@@ -87,7 +97,9 @@
             <div class="clr-row">
                 <div class="clr-col-4"></div>
                 <div class="clr-col-8">
-                    <span>{{ 'IMMUTABLE_TAG.TAG_SEPARATOR' | translate }}</span>
+                    <span
+                        >{{ (tagsKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'IMMUTABLE_TAG.TAG_SEPARATOR') | translate }}</span
+                    >
                 </div>
             </div>
         </div>

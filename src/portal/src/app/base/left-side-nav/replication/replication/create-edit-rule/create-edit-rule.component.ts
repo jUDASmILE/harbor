@@ -20,6 +20,7 @@ import {
     EventEmitter,
     Output,
 } from '@angular/core';
+import { validatePattern } from '../../../../../shared/units/pattern.util';
 import { Filter } from '../../../../../shared/services';
 import { forkJoin, Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
@@ -441,6 +442,7 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
             if (filter.type === FilterType.LABEL) {
                 let fbLabel = this.fb.group({
                     type: FilterType.LABEL,
+                    kind: filter.kind || 'doublestar',
                     decoration: filter.decoration || Decoration.MATCHES,
                 });
                 let filterLabel = this.fb.array(filter.value);
@@ -450,11 +452,16 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
             if (filter.type === FilterType.TAG) {
                 return this.fb.group({
                     type: FilterType.TAG,
+                    kind: filter.kind || 'doublestar',
                     decoration: filter.decoration || Decoration.MATCHES,
                     value: filter.value,
                 });
             }
-            return this.fb.group(filter);
+            return this.fb.group(
+                filter.type === 'name'
+                    ? { ...filter, kind: filter.kind || 'doublestar' }
+                    : filter
+            );
         });
         const filterFormArray = this.fb.array(filterFGs);
         this.ruleForm.setControl('filters', filterFormArray);
@@ -465,6 +472,7 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
             const labelArray = this.fb.array([]);
             const labelControl = this.fb.group({
                 type: name,
+                kind: 'doublestar',
                 decoration: Decoration.MATCHES,
             });
             labelControl.setControl('value', labelArray);
@@ -473,14 +481,16 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
         if (name === FilterType.TAG) {
             return this.fb.group({
                 type: name,
+                kind: 'doublestar',
                 decoration: Decoration.MATCHES,
                 value: '',
             });
         }
-        return this.fb.group({
-            type: name,
-            value: '',
-        });
+        return this.fb.group(
+            name === 'name'
+                ? { type: name, value: '', kind: 'doublestar' }
+                : { type: name, value: '' }
+        );
     }
 
     targetChange($event: any) {
@@ -515,7 +525,22 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
         return !isEmptyObject(this.hasChanges());
     }
 
+    hasInvalidPattern(): boolean {
+        return this.filters.controls.some(filter => {
+            const value = filter.value;
+            return !!validatePattern(
+                value.type === 'label'
+                    ? this.stringForLabelFilter
+                    : value.value,
+                value.kind
+            );
+        });
+    }
+
     onSubmit() {
+        if (this.hasInvalidPattern()) {
+            return;
+        }
         if (this.ruleForm.value.trigger.type === 'event_based') {
             this.ruleForm.get('single_active_replication').setValue(false);
         }
@@ -550,9 +575,12 @@ export class CreateEditRuleComponent implements OnInit, OnDestroy {
             // set stringForLabelFilter
             copyRuleForm.filters.forEach(item => {
                 if (item.type === FilterType.LABEL) {
-                    item.value = this.stringForLabelFilter
-                        .split(',')
-                        .filter(item => item);
+                    item.value =
+                        (item as Filter).kind === 'regex'
+                            ? [this.stringForLabelFilter]
+                            : this.stringForLabelFilter
+                                  .split(',')
+                                  .filter(item => item);
                 }
             });
         }

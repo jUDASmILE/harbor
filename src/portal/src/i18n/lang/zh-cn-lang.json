@@ -2018,5 +2018,12 @@
         "PUSH_PERMISSION_TOOLTIP": "推送权限同时需要拉取权限。",
         "NOT_FOUND": "未发现任何角色!",
         "SEARCH_BY_NAME": "按名称搜索"
+    },
+    "PATTERN": {
+        "ENGINE": "匹配引擎",
+        "REGEX_HELP": "RE2 全字符串匹配，例如 v?\\d+\\.\\d+\\.\\d+。最多 512 个字符，不支持环视和反向引用。",
+        "GLOB_HELP": "Glob 匹配，例如 library/** 或 release-*。多个选项以逗号分隔。",
+        "REGEX_INVALID": "正则表达式无效或使用了 RE2 不支持的语法。",
+        "TOO_LONG": "正则表达式不能超过 512 个字符。"
     }
 }

@@ -2025,5 +2025,12 @@
         "PUSH_PERMISSION_TOOLTIP": "A permissão de push também exige a permissão de pull.",
         "NOT_FOUND": "Nenhuma função encontrada!",
         "SEARCH_BY_NAME": "Procurar por nome"
+    },
+    "PATTERN": {
+        "ENGINE": "Mecanismo de padrões",
+        "REGEX_HELP": "Correspondência RE2 da cadeia inteira; por exemplo v?\\d+\\.\\d+\\.\\d+. Máximo de 512 caracteres. Não há suporte a lookaround nem a referências anteriores.",
+        "GLOB_HELP": "Correspondência glob; por exemplo library/** ou release-*. Separe alternativas com vírgulas.",
+        "REGEX_INVALID": "A expressão regular é inválida ou usa sintaxe não compatível com RE2.",
+        "TOO_LONG": "A expressão regular não pode exceder 512 caracteres."
     }
 }

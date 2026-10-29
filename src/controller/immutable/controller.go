@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/goharbor/harbor/src/lib/errors"
 	"github.com/goharbor/harbor/src/lib/q"
 	"github.com/goharbor/harbor/src/pkg/immutable"
 	"github.com/goharbor/harbor/src/pkg/immutable/model"
@@ -82,11 +83,17 @@ func (r *DefaultAPIController) DeleteImmutableRule(ctx context.Context, id int64
 
 // CreateImmutableRule ...
 func (r *DefaultAPIController) CreateImmutableRule(ctx context.Context, m *model.Metadata) (int64, error) {
+	if err := validateRule(m); err != nil {
+		return 0, err
+	}
 	return r.manager.CreateImmutableRule(ctx, m)
 }
 
 // UpdateImmutableRule ...
 func (r *DefaultAPIController) UpdateImmutableRule(ctx context.Context, projectID int64, m *model.Metadata) error {
+	if m == nil {
+		return errors.BadRequestError(errors.New("immutable rule must not be null"))
+	}
 	m0, err := r.manager.GetImmutableRule(ctx, m.ID)
 	if err != nil {
 		return err
@@ -95,7 +102,16 @@ func (r *DefaultAPIController) UpdateImmutableRule(ctx context.Context, projectI
 		return fmt.Errorf("the immutable tag rule is not found id:%v", m.ID)
 	}
 	if m0.Disabled != m.Disabled {
+		// A toggle keeps the persisted selectors; validate those before enabling.
+		if !m.Disabled {
+			if err := validateRule(m0); err != nil {
+				return err
+			}
+		}
 		return r.manager.EnableImmutableRule(ctx, m.ID, m.Disabled)
+	}
+	if err := validateRule(m); err != nil {
+		return err
 	}
 	return r.manager.UpdateImmutableRule(ctx, projectID, m)
 }
@@ -115,4 +131,14 @@ func NewAPIController(immutableMgr immutable.Manager) Controller {
 	return &DefaultAPIController{
 		manager: immutableMgr,
 	}
+}
+
+func validateRule(m *model.Metadata) error {
+	if m == nil {
+		return errors.BadRequestError(errors.New("immutable rule must not be null"))
+	}
+	if err := m.ValidateSelectors(); err != nil {
+		return errors.BadRequestError(err)
+	}
+	return nil
 }

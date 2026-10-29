@@ -255,11 +255,13 @@ func parseFilters(str string) ([]*model.Filter, error) {
 	for _, item := range items {
 		filter := &model.Filter{
 			Type:       item.Type,
+			Kind:       item.Kind,
 			Value:      item.Value,
 			Decoration: item.Decoration,
 		}
 		// keep backwards compatibility
 		if len(filter.Type) == 0 {
+			filter.Kind = "" // Legacy kind described the filter type, not its pattern engine.
 			if filter.Value == nil {
 				filter.Value = item.Pattern
 			}

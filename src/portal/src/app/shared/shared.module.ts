@@ -49,6 +49,7 @@ import {
     UserPermissionDefaultService,
     UserPermissionService,
 } from './services';
+import { PatternEngineComponent } from './components/pattern-engine/pattern-engine.component';
 import { FilterComponent } from './components/filter/filter.component';
 import { GaugeComponent } from './components/gauge/gauge.component';
 import { ConfirmationDialogComponent } from './components/confirmation-dialog';
@@ -154,6 +155,7 @@ ClarityIcons.addIcons(
 
 @NgModule({
     imports: [
+        PatternEngineComponent,
         TranslateModule.forChild({
             extend: true,
         }),
@@ -203,6 +205,7 @@ ClarityIcons.addIcons(
         RobotPermissionsPanelComponent,
     ],
     exports: [
+        PatternEngineComponent,
         TranslateModule,
         FormsModule,
         ReactiveFormsModule,

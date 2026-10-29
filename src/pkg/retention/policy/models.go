@@ -62,7 +62,15 @@ type Metadata struct {
 
 // ValidateRetentionPolicy validate the retention policy
 func (m *Metadata) ValidateRetentionPolicy() error {
-	// currently only validate the cron string of retention policy
+	if m == nil {
+		return errors.BadRequestError(errors.New("retention policy must not be null"))
+	}
+	for i := range m.Rules {
+		if err := m.Rules[i].ValidateSelectors(); err != nil {
+			return errors.New(err).WithCode(errors.BadRequestCode).
+				WithMessagef("invalid retention rule %d: %v", i+1, err)
+		}
+	}
 	if m.Trigger != nil {
 		if m.Trigger.Kind == TriggerKindSchedule && m.Trigger.Settings != nil {
 			cronItem, ok := m.Trigger.Settings[TriggerSettingsCron]

@@ -165,11 +165,19 @@
                                 (repo.dirty || repo.touched)
                             ">
                             <div class="clr-input-wrapper">
-                                <label class="sub-label required">{{
+                                <label
+                                    class="sub-label"
+                                    [class.required]="reposKind !== 'regex'"
+                                    >{{
                                     'P2P_PROVIDER.REPOS' | translate
-                                }}</label>
+                                    }}</label
+                                >
+                                <hbr-pattern-engine
+                                    [serverError]="inlineAlert?.errorMessage"
+                                    [(kind)]="reposKind"
+                                    [pattern]="repos"></hbr-pattern-engine>
                                 <input
-                                    placeholder="**"
+                                    [placeholder]="reposKind === 'regex' ? '.*' : '**'"
                                     [disabled]="loading"
                                     autocomplete="off"
                                     class="clr-input width-290"
@@ -179,7 +187,7 @@
                                     size="30"
                                     name="repo"
                                     #repo="ngModel"
-                                    required />
+                                    [required]="reposKind !== 'regex'" />
                                 <clr-icon
                                     class="clr-validate-icon"
                                     shape="exclamation-circle"></clr-icon>
@@ -187,7 +195,7 @@
                             <clr-control-helper
                                 class="margin-left-90px opacity-08"
                                 >{{
-                                    'TAG_RETENTION.REP_SEPARATOR' | translate
+                                    (reposKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'TAG_RETENTION.REP_SEPARATOR') | translate
                                 }}</clr-control-helper
                             >
                             @if ( repo.errors && repo.errors.required &&
@@ -209,11 +217,19 @@
                                 (tag.dirty || tag.touched)
                             ">
                             <div class="clr-input-wrapper">
-                                <label class="sub-label required">{{
+                                <label
+                                    class="sub-label"
+                                    [class.required]="tagsKind !== 'regex'"
+                                    >{{
                                     'P2P_PROVIDER.TAGS' | translate
-                                }}</label>
+                                    }}</label
+                                >
+                                <hbr-pattern-engine
+                                    [serverError]="inlineAlert?.errorMessage"
+                                    [(kind)]="tagsKind"
+                                    [pattern]="tags"></hbr-pattern-engine>
                                 <input
-                                    placeholder="**"
+                                    [placeholder]="tagsKind === 'regex' ? '.*' : '**'"
                                     [disabled]="loading"
                                     autocomplete="off"
                                     class="clr-input width-290"
@@ -223,7 +239,7 @@
                                     size="30"
                                     name="tag"
                                     #tag="ngModel"
-                                    required />
+                                    [required]="tagsKind !== 'regex'" />
                                 <clr-icon
                                     class="clr-validate-icon"
                                     shape="exclamation-circle"></clr-icon>
@@ -231,7 +247,7 @@
                             <clr-control-helper
                                 class="margin-left-90px opacity-08"
                                 >{{
-                                    'P2P_PROVIDER.TAG_SEPARATOR' | translate
+                                    (tagsKind === 'regex' ? 'PATTERN.REGEX_HELP' : 'P2P_PROVIDER.TAG_SEPARATOR') | translate
                                 }}</clr-control-helper
                             >
                             @if ( tag.errors && tag.errors.required &&
@@ -251,6 +267,10 @@
                                 <label class="sub-label">{{
                                     'P2P_PROVIDER.LABELS' | translate
                                 }}</label>
+                                <hbr-pattern-engine
+                                    [serverError]="inlineAlert?.errorMessage"
+                                    [(kind)]="labelsKind"
+                                    [pattern]="labels"></hbr-pattern-engine>
                                 <input
                                     [disabled]="loading"
                                     autocomplete="off"
@@ -337,6 +357,9 @@
                             <label class="sub-text opacity-054"
                                 >{{
                                     'P2P_PROVIDER.START_TEXT' | translate
+
+
+
                                 }}&nbsp;</label
                             >
                             <div class="clr-select-wrapper">

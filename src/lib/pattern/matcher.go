@@ -16,7 +16,10 @@ package pattern
 
 import (
 	"regexp"
+	"regexp/syntax"
 	"strings"
+	"sync"
+	"unicode/utf8"
 
 	"github.com/bmatcuk/doublestar"
 
@@ -30,110 +33,230 @@ const (
 	KindDoublestar = "doublestar"
 )
 
-// ValidateRepositoryFilter validates the repository filter kind and pattern.
-// Empty pattern is valid and means all repositories are allowed.
-func ValidateRepositoryFilter(filterPattern, kind string) error {
-	_, err := Match("", filterPattern, kind)
+// MaxRegexLength bounds the cost of compiling a user-supplied regular expression.
+const MaxRegexLength = 512
+
+// Matcher is a reusable, immutable pattern compiled when a policy is loaded.
+// A Matcher may be used concurrently by multiple goroutines.
+type Matcher struct {
+	glob  string
+	regex *regexp.Regexp
+	all   bool
+}
+
+// Keep repeated policy loads from recompiling identical expressions. Bounding the
+// cache also bounds memory across edits and across projects.
+var regexCache = struct {
+	sync.Mutex
+	matchers map[string]*Matcher
+}{matchers: make(map[string]*Matcher)}
+
+// Compile prepares a full-string matcher. An absent kind means doublestar.
+// Pattern text is preserved verbatim; an empty pattern matches every value.
+func Compile(filterPattern, kind string) (*Matcher, error) {
+	if err := ValidateKind(kind); err != nil {
+		return nil, err
+	}
+	m := &Matcher{glob: filterPattern, all: filterPattern == ""}
+	if kind == KindRegex {
+		if utf8.RuneCountInString(filterPattern) > MaxRegexLength {
+			return nil, errors.Errorf("regular expression exceeds the maximum length of %d characters", MaxRegexLength)
+		}
+		// Parse the original expression before anchoring. Building the wrapper
+		// as syntax also preserves valid unclosed \Q quotes and inline flags,
+		// which can swallow or weaken anchors in a concatenated string wrapper.
+		regexCache.Lock()
+		defer regexCache.Unlock()
+		if cached, ok := regexCache.matchers[filterPattern]; ok {
+			return cached, nil
+		}
+		expr, err := syntax.Parse(filterPattern, syntax.Perl)
+		if err != nil {
+			return nil, err
+		}
+		anchored := &syntax.Regexp{Op: syntax.OpConcat, Sub: []*syntax.Regexp{
+			{Op: syntax.OpBeginText}, expr, {Op: syntax.OpEndText},
+		}}
+		m.regex, err = regexp.Compile(anchored.String())
+		if err != nil {
+			return nil, err
+		}
+		if len(regexCache.matchers) >= 1024 {
+			regexCache.matchers = make(map[string]*Matcher)
+		}
+		regexCache.matchers[filterPattern] = m
+	} else if !validateDoublestarPattern(filterPattern) {
+		return nil, doublestar.ErrBadPattern
+	}
+	return m, nil
+}
+
+// MatchString reports whether the entire value matches the compiled pattern.
+func (m *Matcher) MatchString(value string) bool {
+	if m.all {
+		return true
+	}
+	if m.regex != nil {
+		return m.regex.MatchString(value)
+	}
+	matched, _ := doublestar.Match(m.glob, value) // syntax checked at construction
+	return matched
+}
+
+// Validate checks the kind and pattern without changing the pattern text.
+func Validate(filterPattern, kind string) error {
+	_, err := Compile(filterPattern, kind)
 	return err
 }
 
-// ValidateKind validates the repository filter kind. Empty kind is valid and
-// means the doublestar default.
+// ValidateRepositoryFilter preserves the proxy-cache filter's whitespace handling.
+func ValidateRepositoryFilter(filterPattern, kind string) error {
+	return Validate(strings.TrimSpace(filterPattern), kind)
+}
+
+// ValidateKind validates the pattern engine. Empty means the doublestar default.
 func ValidateKind(kind string) error {
 	switch kind {
 	case "", KindRegex, KindDoublestar:
 		return nil
 	default:
-		return errors.Errorf("unsupported repository filter kind %q, must be %q, %q, or empty (defaults to %q)", kind, KindDoublestar, KindRegex, KindDoublestar)
+		return errors.Errorf("unsupported pattern kind %q, must be %q, %q, or empty (defaults to %q)", kind, KindDoublestar, KindRegex, KindDoublestar)
 	}
 }
 
-// Match returns true if the value matches the pattern according to the kind.
-// Empty pattern matches all (returns true).
+// Match preserves the proxy-cache filter's whitespace handling. Policy filters
+// should use Compile once at construction and reuse the resulting matcher.
 func Match(value, filterPattern, kind string) (bool, error) {
-	filterPattern = strings.TrimSpace(filterPattern)
-	if filterPattern == "" {
-		return true, nil
+	m, err := Compile(strings.TrimSpace(filterPattern), kind)
+	if err != nil {
+		return false, err
 	}
-	switch kind {
-	case KindRegex:
-		// Compile the bare pattern first: a group-imbalanced pattern such as
-		// `foo)|(bar` fails alone but compiles inside the ^(?:...)$ wrapper,
-		// where the top-level alternation silently destroys the anchoring.
-		if _, err := regexp.Compile(filterPattern); err != nil {
-			return false, err
-		}
-		re, err := regexp.Compile("^(?:" + filterPattern + ")$")
-		if err != nil {
-			return false, err
-		}
-		return re.MatchString(value), nil
-	case KindDoublestar, "":
-		if !validateDoublestarPattern(filterPattern) {
-			return false, doublestar.ErrBadPattern
-		}
-		return doublestar.Match(filterPattern, value)
-	default:
-		return false, errors.Errorf("unsupported repository filter kind %q", kind)
-	}
+	return m.MatchString(value), nil
 }
 
-// validateDoublestarPattern is a port of doValidatePattern from
-// github.com/bmatcuk/doublestar/v4; the v1 dependency in go.mod has no
-// ValidatePattern. Keep it in sync with the library's grammar if the
-// dependency is ever bumped.
+// validateDoublestarPattern follows doublestar v1's parser independently of a
+// candidate. Its alternative splitter deliberately counts braces and commas
+// inside character classes, and its class terminator treats a bracket preceded
+// by any backslash as escaped. Preserve those quirks until the engine is upgraded.
 func validateDoublestarPattern(s string) bool {
-	altDepth := 0
-	l := len(s)
-VALIDATE:
-	for i := 0; i < l; i++ {
-		switch s[i] {
+	return validateGlob(s, make(map[string]bool))
+}
+
+func validateGlob(s string, memo map[string]bool) (valid bool) {
+	if result, ok := memo[s]; ok {
+		return result
+	}
+	defer func() { memo[s] = valid }()
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		switch r {
 		case '\\':
-			// skip the next byte - return false if there is no next byte
-			if i++; i >= l {
+			if i >= len(s) {
 				return false
 			}
-			continue
-
+			escaped, width := utf8.DecodeRuneInString(s[i:])
+			if escaped == utf8.RuneError {
+				return false
+			}
+			i += width
 		case '[':
-			if i++; i >= l {
-				// class didn't end
+			end := globClassEnd(s, i)
+			if end < 0 || !validateGlobClass([]rune(s[i:end])) {
 				return false
 			}
-			if s[i] == '^' || s[i] == '!' {
-				i++
-			}
-			if i >= l || s[i] == ']' {
-				// class didn't end or empty character class
+			i = end + 1
+		case '{':
+			options, end := globAlternatives(s, i)
+			if end < 0 {
 				return false
 			}
-
-			for ; i < l; i++ {
-				if s[i] == '\\' {
-					i++
-				} else if s[i] == ']' {
-					// looks good
-					continue VALIDATE
+			// v1 concatenates each alternative with the remaining pattern. This
+			// also permits a class opened in an alternative to close in the suffix.
+			for _, option := range options {
+				if !validateGlob(option+s[end:], memo) {
+					return false
 				}
 			}
-
-			// class didn't end
-			return false
-
-		case '{':
-			altDepth++
-			continue
-
-		case '}':
-			if altDepth == 0 {
-				// alt end without a corresponding start
-				return false
-			}
-			altDepth--
-			continue
+			return true
 		}
 	}
+	return true
+}
 
-	// valid as long as all alts are closed
-	return altDepth == 0
+func globClassEnd(s string, start int) int {
+	for i := start; i < len(s); i++ {
+		if s[i] == ']' && (i == start || s[i-1] != '\\') {
+			return i
+		}
+	}
+	return -1
+}
+
+func validateGlobClass(class []rune) bool {
+	if len(class) == 0 {
+		return false
+	}
+	i := 0
+	if class[0] == '^' {
+		i++ // v1 accepts [^] as a negated empty class.
+	}
+	for i < len(class) {
+		if class[i] == '-' {
+			return false
+		}
+		low := class[i]
+		i++
+		if low == '\\' {
+			if i >= len(class) {
+				return false
+			}
+			i++
+		}
+		if i < len(class) && class[i] == '-' {
+			i++
+			if i >= len(class) || class[i] == '-' {
+				return false
+			}
+			high := class[i]
+			i++
+			if high == '\\' {
+				if i >= len(class) {
+					return false
+				}
+				i++
+			}
+		}
+	}
+	return true
+}
+
+func globAlternatives(s string, start int) ([]string, int) {
+	var options []string
+	depth, escaped, optionStart := 1, false, start
+	for i := start; i < len(s); {
+		r, width := utf8.DecodeRuneInString(s[i:])
+		if escaped {
+			escaped = false
+		} else {
+			switch r {
+			case '\\':
+				escaped = true
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					return append(options, s[optionStart:i]), i + width
+				}
+			case ',':
+				if depth == 1 {
+					options = append(options, s[optionStart:i])
+					optionStart = i + width
+				}
+			}
+		}
+		i += width
+	}
+	return nil, -1
 }

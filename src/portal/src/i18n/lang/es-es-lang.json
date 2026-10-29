@@ -2023,5 +2023,12 @@
         "PUSH_PERMISSION_TOOLTIP": "El permiso de push también requiere el permiso de pull.",
         "NOT_FOUND": "No pudimos encontrar ningún rol!",
         "SEARCH_BY_NAME": "Buscar por nombre"
+    },
+    "PATTERN": {
+        "ENGINE": "Motor de patrones",
+        "REGEX_HELP": "Coincidencia RE2 de toda la cadena; por ejemplo v?\\d+\\.\\d+\\.\\d+. Máximo 512 caracteres. No admite aserciones de anticipación ni referencias inversas.",
+        "GLOB_HELP": "Coincidencia glob; por ejemplo library/** o release-*. Separe las alternativas con comas.",
+        "REGEX_INVALID": "La expresión regular no es válida o usa sintaxis no compatible con RE2.",
+        "TOO_LONG": "La expresión regular no debe superar los 512 caracteres."
     }
 }
